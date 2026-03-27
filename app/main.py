@@ -15,6 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
+from app.agents.auto_poster import auto_post, get_auto_post_config
 from app.agents.caption_generator import generate_captions
 from app.agents.pipeline import run_pipeline
 from app.ai_failover import (
@@ -86,6 +87,11 @@ class VariantUpdate(BaseModel):
     description: str | None = None
     tags: list[str] | None = None
     price: str | None = None
+
+
+class SocialPostUpdate(BaseModel):
+    caption: str | None = None
+    post_status: str | None = None
 
 
 # ── Helper Functions ──────────────────────────────────────────────────
@@ -459,6 +465,161 @@ async def generate_product_captions(product_id: int):
     if not result["success"]:
         raise HTTPException(status_code=500, detail=result["message"])
     return result
+
+
+# ══════════════════════════════════════════════════════════════════════
+# SOCIAL POSTS MANAGEMENT
+# ══════════════════════════════════════════════════════════════════════
+
+@app.get("/api/social-posts")
+async def list_social_posts(
+    product_id: int | None = Query(None, description="Filter by product ID"),
+    platform: str | None = Query(None, description="Filter by platform"),
+    post_status: str | None = Query(None, description="Filter by status"),
+):
+    """List all social posts with optional filters."""
+    with get_db() as conn:
+        query = "SELECT * FROM social_posts WHERE 1=1"
+        params: list = []
+
+        if product_id is not None:
+            query += " AND product_id = ?"
+            params.append(product_id)
+        if platform:
+            query += " AND platform = ?"
+            params.append(platform)
+        if post_status:
+            query += " AND post_status = ?"
+            params.append(post_status)
+
+        query += " ORDER BY created_at DESC"
+        rows = conn.execute(query, params).fetchall()
+
+    posts = []
+    for r in rows:
+        post = row_to_dict(r)
+        # Parse metadata from voice_url field
+        metadata = parse_json_field(post.get("voice_url"), {})
+        if isinstance(metadata, dict):
+            post["hashtags"] = metadata.get("hashtags", [])
+            post["subreddits"] = metadata.get("subreddits", [])
+        else:
+            post["hashtags"] = []
+            post["subreddits"] = []
+        posts.append(post)
+
+    return {"posts": posts, "count": len(posts)}
+
+
+@app.get("/api/social-posts/{post_id}")
+async def get_social_post(post_id: int):
+    """Get a single social post by ID."""
+    with get_db() as conn:
+        row = conn.execute("SELECT * FROM social_posts WHERE id = ?", (post_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Social post not found")
+
+    post = row_to_dict(row)
+    metadata = parse_json_field(post.get("voice_url"), {})
+    if isinstance(metadata, dict):
+        post["hashtags"] = metadata.get("hashtags", [])
+        post["subreddits"] = metadata.get("subreddits", [])
+    else:
+        post["hashtags"] = []
+        post["subreddits"] = []
+    return post
+
+
+@app.patch("/api/social-posts/{post_id}")
+async def update_social_post(post_id: int, update: SocialPostUpdate):
+    """Edit a social post caption or status."""
+    with get_db() as conn:
+        existing = conn.execute("SELECT * FROM social_posts WHERE id = ?", (post_id,)).fetchone()
+        if not existing:
+            raise HTTPException(status_code=404, detail="Social post not found")
+
+        fields = []
+        values: list = []
+
+        if update.caption is not None:
+            fields.append("caption = ?")
+            values.append(update.caption)
+        if update.post_status is not None:
+            fields.append("post_status = ?")
+            values.append(update.post_status)
+
+        if not fields:
+            raise HTTPException(status_code=400, detail="No fields to update")
+
+        values.append(post_id)
+        conn.execute(
+            f"UPDATE social_posts SET {', '.join(fields)} WHERE id = ?", values
+        )
+        row = conn.execute("SELECT * FROM social_posts WHERE id = ?", (post_id,)).fetchone()
+
+    post = row_to_dict(row)
+    metadata = parse_json_field(post.get("voice_url"), {})
+    if isinstance(metadata, dict):
+        post["hashtags"] = metadata.get("hashtags", [])
+        post["subreddits"] = metadata.get("subreddits", [])
+    else:
+        post["hashtags"] = []
+        post["subreddits"] = []
+    return post
+
+
+@app.post("/api/social-posts/{post_id}/post")
+async def trigger_auto_post(post_id: int):
+    """Trigger auto-posting for a social post.
+
+    Supported platforms: Telegram, Tumblr, Pinterest.
+    Requires API keys configured in .env.
+    """
+    with get_db() as conn:
+        row = conn.execute("SELECT * FROM social_posts WHERE id = ?", (post_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Social post not found")
+
+        post = row_to_dict(row)
+
+        # Try to find an image for the post
+        image_path = ""
+        image_url = ""
+        variant = conn.execute(
+            "SELECT image_urls FROM product_variants WHERE product_id = ? AND platform = ? LIMIT 1",
+            (post["product_id"], post["platform"]),
+        ).fetchone()
+        if not variant:
+            # Try any variant for this product
+            variant = conn.execute(
+                "SELECT image_urls FROM product_variants WHERE product_id = ? LIMIT 1",
+                (post["product_id"],),
+            ).fetchone()
+
+        if variant:
+            urls = parse_json_field(variant["image_urls"], [])
+            if urls:
+                first_url = urls[0]
+                if first_url.startswith("/api/images/"):
+                    filename = first_url.replace("/api/images/", "")
+                    candidate = IMAGES_DIR / filename
+                    if candidate.exists():
+                        image_path = str(candidate)
+                elif first_url.startswith("http"):
+                    image_url = first_url
+
+    result = await auto_post(post_id=post_id, image_path=image_path, image_url=image_url)
+
+    if not result.get("success"):
+        raise HTTPException(status_code=400, detail=result.get("message", "Auto-posting failed"))
+
+    return result
+
+
+@app.get("/api/auto-post/config")
+async def get_auto_post_status():
+    """Get configuration status of auto-posting platforms."""
+    return get_auto_post_config()
 
 
 # ══════════════════════════════════════════════════════════════════════

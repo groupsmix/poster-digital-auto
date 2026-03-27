@@ -1,4 +1,4 @@
-import type { Product, ProductCreate, Stats, AIProvider } from "./types";
+import type { Product, ProductCreate, Stats, AIProvider, SocialPost, AutoPostConfig } from "./types";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -48,4 +48,40 @@ export async function fetchAIStatus(): Promise<{ providers: AIProvider[]; count:
 
 export async function resetAILimits(): Promise<{ message: string }> {
   return request("/api/ai-status/reset", { method: "POST" });
+}
+
+// Social Posts
+export async function fetchSocialPosts(filters?: {
+  product_id?: number;
+  platform?: string;
+  post_status?: string;
+}): Promise<{ posts: SocialPost[]; count: number }> {
+  const params = new URLSearchParams();
+  if (filters?.product_id) params.set("product_id", String(filters.product_id));
+  if (filters?.platform) params.set("platform", filters.platform);
+  if (filters?.post_status) params.set("post_status", filters.post_status);
+  const query = params.toString() ? `?${params}` : "";
+  return request(`/api/social-posts${query}`);
+}
+
+export async function updateSocialPost(
+  id: number,
+  data: { caption?: string; post_status?: string },
+): Promise<SocialPost> {
+  return request<SocialPost>(`/api/social-posts/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function triggerAutoPost(id: number): Promise<{ success: boolean; message: string; post_url: string; platform: string }> {
+  return request(`/api/social-posts/${id}/post`, { method: "POST" });
+}
+
+export async function generateCaptions(productId: number): Promise<unknown> {
+  return request(`/api/products/${productId}/captions`, { method: "POST" });
+}
+
+export async function fetchAutoPostConfig(): Promise<AutoPostConfig> {
+  return request<AutoPostConfig>("/api/auto-post/config");
 }

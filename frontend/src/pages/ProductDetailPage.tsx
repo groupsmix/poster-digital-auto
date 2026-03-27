@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Copy, Download, Check } from "lucide-react";
-import { fetchProduct } from "@/lib/api";
-import type { Product } from "@/lib/types";
+import { ArrowLeft, Copy, Download, Check, ClipboardList, Send, Edit3 } from "lucide-react";
+import { fetchProduct, generateCaptions, triggerAutoPost, updateSocialPost, fetchAutoPostConfig } from "@/lib/api";
+import type { Product, AutoPostConfig } from "@/lib/types";
 import StatusBadge from "@/components/StatusBadge";
 import CeoScoreBadge from "@/components/CeoScoreBadge";
 import Spinner from "@/components/Spinner";
@@ -29,6 +29,272 @@ function CopyButton({ text, label }: { text: string; label: string }) {
       {copied ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
       {copied ? "Copied" : "Copy"}
     </button>
+  );
+}
+
+const AUTO_POST_PLATFORMS = ["Telegram", "Tumblr", "Pinterest"];
+
+function SocialPostsTab({
+  product,
+  setProduct,
+}: {
+  product: Product;
+  setProduct: React.Dispatch<React.SetStateAction<Product | null>>;
+}) {
+  const [generating, setGenerating] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editCaption, setEditCaption] = useState("");
+  const [postingId, setPostingId] = useState<number | null>(null);
+  const [autoPostConfig, setAutoPostConfig] = useState<AutoPostConfig | null>(null);
+
+  useEffect(() => {
+    fetchAutoPostConfig().then(setAutoPostConfig).catch(() => {});
+  }, []);
+
+  async function handleGenerate() {
+    setGenerating(true);
+    try {
+      await generateCaptions(product.id);
+      const updated = await fetchProduct(product.id);
+      setProduct(updated);
+      toast.success("Captions generated for all platforms!");
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Generation failed";
+      toast.error(msg);
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  function handleCopyAll(platform: string) {
+    const posts = product.social_posts?.filter((p) => p.platform === platform) ?? [];
+    const text = posts.map((p) => p.caption).join("\n\n---\n\n");
+    navigator.clipboard.writeText(text).then(() => toast.success(`All ${platform} captions copied!`));
+  }
+
+  function handleCopyAllPlatforms() {
+    const posts = product.social_posts ?? [];
+    const text = posts
+      .map((p) => `=== ${p.platform} ===\n\n${p.caption}`)
+      .join("\n\n---\n\n");
+    navigator.clipboard.writeText(text).then(() => toast.success("All captions copied!"));
+  }
+
+  async function handleSaveEdit(id: number) {
+    try {
+      const updated = await updateSocialPost(id, { caption: editCaption });
+      setProduct((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          social_posts: prev.social_posts?.map((p) => (p.id === id ? { ...p, ...updated } : p)),
+        };
+      });
+      setEditingId(null);
+      toast.success("Caption updated!");
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Update failed";
+      toast.error(msg);
+    }
+  }
+
+  async function handleAutoPost(id: number) {
+    setPostingId(id);
+    try {
+      const result = await triggerAutoPost(id);
+      setProduct((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          social_posts: prev.social_posts?.map((p) =>
+            p.id === id ? { ...p, post_status: "posted", post_url: result.post_url } : p,
+          ),
+        };
+      });
+      toast.success(`Posted to ${result.platform}!`);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Auto-post failed";
+      toast.error(msg);
+    } finally {
+      setPostingId(null);
+    }
+  }
+
+  function isAutoPostAvailable(platform: string): boolean {
+    if (!autoPostConfig) return false;
+    const key = platform.toLowerCase() as keyof AutoPostConfig;
+    return AUTO_POST_PLATFORMS.includes(platform) && autoPostConfig[key]?.configured === true;
+  }
+
+  const posts = product.social_posts ?? [];
+  const platforms = [...new Set(posts.map((p) => p.platform))];
+
+  return (
+    <div className="space-y-6">
+      {/* Actions bar */}
+      <div className="flex flex-wrap items-center gap-3">
+        <button
+          onClick={handleGenerate}
+          disabled={generating}
+          className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-500 disabled:opacity-50"
+        >
+          {generating ? <Spinner className="h-4 w-4" /> : <ClipboardList className="h-4 w-4" />}
+          {generating ? "Generating..." : "Generate Captions"}
+        </button>
+        {posts.length > 0 && (
+          <button
+            onClick={handleCopyAllPlatforms}
+            className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-800 px-4 py-2 text-sm font-medium text-zinc-300 hover:bg-zinc-700"
+          >
+            <Copy className="h-4 w-4" />
+            Copy All ({posts.length})
+          </button>
+        )}
+      </div>
+
+      {posts.length === 0 ? (
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-10 text-center">
+          <p className="text-zinc-400">
+            No social posts generated yet. Click &ldquo;Generate Captions&rdquo; to create captions for all 11 platforms.
+          </p>
+        </div>
+      ) : (
+        platforms.map((platform) => {
+          const platformPosts = posts.filter((p) => p.platform === platform);
+          return (
+            <div key={platform} className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="rounded bg-fuchsia-500/20 px-2.5 py-1 text-sm font-semibold text-fuchsia-300">
+                    {platform}
+                  </span>
+                  <span className="text-xs text-zinc-500">({platformPosts.length})</span>
+                </div>
+                <button
+                  onClick={() => handleCopyAll(platform)}
+                  className="inline-flex items-center gap-1 rounded-md border border-zinc-700 bg-zinc-800 px-2 py-1 text-xs font-medium text-zinc-300 hover:bg-zinc-700"
+                >
+                  <Copy className="h-3 w-3" />
+                  Copy All
+                </button>
+              </div>
+
+              {platformPosts.map((post) => (
+                <div
+                  key={post.id}
+                  className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-5"
+                >
+                  <div className="flex items-center justify-between">
+                    <StatusBadge status={post.post_status} />
+                    <div className="flex items-center gap-2">
+                      <CopyButton text={post.caption} label={`${platform} caption`} />
+                      <button
+                        onClick={() => {
+                          setEditingId(post.id);
+                          setEditCaption(post.caption);
+                        }}
+                        className="inline-flex items-center gap-1 rounded-md border border-zinc-700 bg-zinc-800 px-2 py-1 text-xs font-medium text-zinc-300 hover:bg-zinc-700"
+                      >
+                        <Edit3 className="h-3 w-3" />
+                        Edit
+                      </button>
+                      {AUTO_POST_PLATFORMS.includes(platform) && (
+                        <button
+                          onClick={() => handleAutoPost(post.id)}
+                          disabled={postingId === post.id || !isAutoPostAvailable(platform)}
+                          className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium ${
+                            isAutoPostAvailable(platform)
+                              ? "bg-violet-600 text-white hover:bg-violet-500"
+                              : "bg-zinc-800 text-zinc-500 cursor-not-allowed border border-zinc-700"
+                          }`}
+                          title={
+                            isAutoPostAvailable(platform)
+                              ? `Auto-post to ${platform}`
+                              : `${platform} API not configured`
+                          }
+                        >
+                          {postingId === post.id ? (
+                            <Spinner className="h-3 w-3" />
+                          ) : (
+                            <Send className="h-3 w-3" />
+                          )}
+                          Post
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {editingId === post.id ? (
+                    <div className="mt-3 space-y-2">
+                      <textarea
+                        value={editCaption}
+                        onChange={(e) => setEditCaption(e.target.value)}
+                        className="w-full rounded-lg bg-zinc-800 p-3 text-sm text-zinc-200 border border-zinc-700 focus:border-violet-500 focus:outline-none min-h-[120px] resize-y"
+                      />
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleSaveEdit(post.id)}
+                          className="rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-500"
+                        >
+                          Save
+                        </button>
+                        <button
+                          onClick={() => setEditingId(null)}
+                          className="rounded-md bg-zinc-700 px-3 py-1.5 text-xs font-medium text-zinc-300 hover:bg-zinc-600"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="mt-3 whitespace-pre-wrap rounded-lg bg-zinc-800/50 p-3 text-sm text-zinc-200">
+                      {post.caption}
+                    </p>
+                  )}
+
+                  {post.hashtags && post.hashtags.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {post.hashtags.map((tag, i) => (
+                        <span key={i} className="rounded-full bg-violet-500/10 px-2 py-0.5 text-xs text-violet-300">
+                          #{tag}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  {post.subreddits && post.subreddits.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {post.subreddits.map((sub, i) => (
+                        <span key={i} className="rounded-full bg-orange-500/10 px-2 py-0.5 text-xs text-orange-300">
+                          r/{sub}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  {post.post_url && (
+                    <a
+                      href={post.post_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-2 inline-flex items-center gap-1 text-xs text-violet-400 hover:text-violet-300"
+                    >
+                      View post <span className="text-[10px]">&rarr;</span>
+                    </a>
+                  )}
+
+                  <p className="mt-2 text-xs text-zinc-600">
+                    {post.posted_at
+                      ? `Posted: ${new Date(post.posted_at).toLocaleString()}`
+                      : `Created: ${new Date(post.created_at).toLocaleString()}`}
+                  </p>
+                </div>
+              ))}
+            </div>
+          );
+        })
+      )}
+    </div>
   );
 }
 
@@ -260,37 +526,7 @@ export default function ProductDetailPage() {
       )}
 
       {tab === "social" && (
-        <div className="space-y-4">
-          {(!product.social_posts || product.social_posts.length === 0) ? (
-            <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-10 text-center">
-              <p className="text-zinc-400">No social posts generated yet.</p>
-            </div>
-          ) : (
-            product.social_posts.map((post) => (
-              <div key={post.id} className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-5">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="rounded bg-fuchsia-500/20 px-2.5 py-1 text-sm font-semibold text-fuchsia-300">
-                      {post.platform}
-                    </span>
-                    <StatusBadge status={post.post_status} />
-                  </div>
-                  {post.caption && <CopyButton text={post.caption} label={`${post.platform} caption`} />}
-                </div>
-                {post.caption && (
-                  <p className="mt-3 whitespace-pre-wrap rounded-lg bg-zinc-800/50 p-3 text-sm text-zinc-200">
-                    {post.caption}
-                  </p>
-                )}
-                {post.posted_at && (
-                  <p className="mt-2 text-xs text-zinc-500">
-                    Posted: {new Date(post.posted_at).toLocaleString()}
-                  </p>
-                )}
-              </div>
-            ))
-          )}
-        </div>
+        <SocialPostsTab product={product} setProduct={setProduct} />
       )}
 
       {tab === "logs" && (

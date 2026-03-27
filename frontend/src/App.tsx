@@ -6,6 +6,7 @@ import NewProductPage from "@/pages/NewProductPage";
 import ProductListPage from "@/pages/ProductListPage";
 import ProductDetailPage from "@/pages/ProductDetailPage";
 import AIStatusPage from "@/pages/AIStatusPage";
+import SocialPostsPage from "@/pages/SocialPostsPage";
 
 function App() {
   return (
@@ -19,6 +20,7 @@ function App() {
             <Route path="/products" element={<ProductListPage />} />
             <Route path="/products/:id" element={<ProductDetailPage />} />
             <Route path="/ai-status" element={<AIStatusPage />} />
+            <Route path="/social-posts" element={<SocialPostsPage />} />
           </Routes>
         </main>
         <Toaster

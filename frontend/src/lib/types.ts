@@ -50,6 +50,8 @@ export interface SocialPost {
   scheduled_at: string | null;
   posted_at: string | null;
   created_at: string;
+  hashtags?: string[];
+  subreddits?: string[];
 }
 
 export interface PipelineLog {
@@ -93,4 +95,15 @@ export interface ProductCreate {
   target_languages: string[];
   status: string;
   plan_mode: string;
+}
+
+export interface AutoPostPlatformConfig {
+  configured: boolean;
+  [key: string]: boolean;
+}
+
+export interface AutoPostConfig {
+  telegram: AutoPostPlatformConfig;
+  tumblr: AutoPostPlatformConfig;
+  pinterest: AutoPostPlatformConfig;
 }
