@@ -1,4 +1,4 @@
-import type { Product, ProductCreate, Stats, AIProvider, SocialPost, AutoPostConfig } from "./types";
+import type { Product, ProductCreate, Stats, AIProvider, SocialPost, AutoPostConfig, CalendarPost, ScheduleSuggestion } from "./types";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -84,4 +84,60 @@ export async function generateCaptions(productId: number): Promise<unknown> {
 
 export async function fetchAutoPostConfig(): Promise<AutoPostConfig> {
   return request<AutoPostConfig>("/api/auto-post/config");
+}
+
+// Calendar & Scheduler
+export async function fetchCalendarPosts(start: string, end: string): Promise<{ posts: CalendarPost[]; count: number }> {
+  return request(`/api/calendar?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`);
+}
+
+export async function schedulePost(postId: number, scheduledAt: string): Promise<CalendarPost> {
+  return request<CalendarPost>("/api/calendar/schedule", {
+    method: "POST",
+    body: JSON.stringify({ post_id: postId, scheduled_at: scheduledAt }),
+  });
+}
+
+export async function reschedulePost(postId: number, scheduledAt: string): Promise<CalendarPost> {
+  return request<CalendarPost>(`/api/calendar/${postId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ scheduled_at: scheduledAt }),
+  });
+}
+
+export async function unschedulePost(postId: number): Promise<{ message: string }> {
+  return request(`/api/calendar/${postId}`, { method: "DELETE" });
+}
+
+export async function fetchScheduleSuggestions(platform?: string): Promise<{ suggestions: ScheduleSuggestion[]; count: number }> {
+  const query = platform ? `?platform=${encodeURIComponent(platform)}` : "";
+  return request(`/api/calendar/suggestions${query}`);
+}
+
+export async function autoSchedulePosts(body: {
+  post_ids?: number[];
+  start_date?: string;
+  days_span?: number;
+  posts_per_day?: number;
+}): Promise<{ scheduled: CalendarPost[]; count: number; message: string }> {
+  return request("/api/calendar/auto-schedule", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function batchScheduleProducts(body: {
+  product_ids: number[];
+  start_date?: string;
+  days_span?: number;
+  posts_per_day?: number;
+}): Promise<{ scheduled: CalendarPost[]; count: number; message: string }> {
+  return request("/api/calendar/batch-schedule", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function fetchPlatformColors(): Promise<Record<string, string>> {
+  return request("/api/calendar/platform-colors");
 }
