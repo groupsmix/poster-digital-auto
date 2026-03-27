@@ -265,6 +265,48 @@ class BundlePricingRequest(BaseModel):
     discount_percent: float = 25
 
 
+class PlatformCreateRequest(BaseModel):
+    platform: str
+    tone: str = ""
+    plan_mode: str = "A"
+    enabled: bool = True
+    max_title_length: int = 200
+    max_description_length: int = 5000
+    custom_instructions: str = ""
+    platform_type: str = "social"
+
+
+class PlatformUpdateRequest(BaseModel):
+    tone: str | None = None
+    plan_mode: str | None = None
+    enabled: bool | None = None
+    max_title_length: int | None = None
+    max_description_length: int | None = None
+    custom_instructions: str | None = None
+    platform_type: str | None = None
+
+
+class PersonaCreateRequest(BaseModel):
+    name: str
+    age_range: str = ""
+    description: str = ""
+    preferences: dict | None = None
+    platforms: list[str] | None = None
+
+
+class PersonaUpdateRequest(BaseModel):
+    name: str | None = None
+    age_range: str | None = None
+    description: str | None = None
+    preferences: dict | None = None
+    platforms: list[str] | None = None
+
+
+class PreferenceUpdateRequest(BaseModel):
+    key: str
+    value: str
+
+
 class FAQCreateRequest(BaseModel):
     question: str
     answer: str
@@ -823,8 +865,32 @@ async def list_platform_settings():
     return {"platforms": [row_to_dict(r) for r in rows]}
 
 
+@app.post("/api/settings/platforms", status_code=201)
+async def create_platform_setting(body: PlatformCreateRequest):
+    """Add a new platform with settings."""
+    with get_db() as conn:
+        existing = conn.execute(
+            "SELECT id FROM platform_settings WHERE platform = ?", (body.platform,)
+        ).fetchone()
+        if existing:
+            raise HTTPException(status_code=409, detail=f"Platform '{body.platform}' already exists")
+
+        cursor = conn.execute(
+            """INSERT INTO platform_settings
+               (platform, tone, plan_mode, enabled, max_title_length, max_description_length, custom_instructions)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (body.platform, body.tone, body.plan_mode, 1 if body.enabled else 0,
+             body.max_title_length, body.max_description_length, body.custom_instructions),
+        )
+        row = conn.execute(
+            "SELECT * FROM platform_settings WHERE id = ?", (cursor.lastrowid,)
+        ).fetchone()
+
+    return row_to_dict(row)
+
+
 @app.patch("/api/settings/platforms/{platform_id}")
-async def update_platform_setting(platform_id: int, body: dict):
+async def update_platform_setting(platform_id: int, body: PlatformUpdateRequest):
     """Update a platform setting."""
     with get_db() as conn:
         existing = conn.execute(
@@ -833,14 +899,26 @@ async def update_platform_setting(platform_id: int, body: dict):
         if not existing:
             raise HTTPException(status_code=404, detail="Platform setting not found")
 
-        allowed_fields = {"tone", "plan_mode", "enabled", "max_title_length",
-                          "max_description_length", "custom_instructions"}
         fields = []
         values = []
-        for key, val in body.items():
-            if key in allowed_fields:
-                fields.append(f"{key} = ?")
-                values.append(val)
+        if body.tone is not None:
+            fields.append("tone = ?")
+            values.append(body.tone)
+        if body.plan_mode is not None:
+            fields.append("plan_mode = ?")
+            values.append(body.plan_mode)
+        if body.enabled is not None:
+            fields.append("enabled = ?")
+            values.append(1 if body.enabled else 0)
+        if body.max_title_length is not None:
+            fields.append("max_title_length = ?")
+            values.append(body.max_title_length)
+        if body.max_description_length is not None:
+            fields.append("max_description_length = ?")
+            values.append(body.max_description_length)
+        if body.custom_instructions is not None:
+            fields.append("custom_instructions = ?")
+            values.append(body.custom_instructions)
 
         if not fields:
             raise HTTPException(status_code=400, detail="No valid fields to update")
@@ -854,6 +932,179 @@ async def update_platform_setting(platform_id: int, body: dict):
         ).fetchone()
 
     return row_to_dict(row)
+
+
+@app.delete("/api/settings/platforms/{platform_id}")
+async def delete_platform_setting(platform_id: int):
+    """Remove a platform."""
+    with get_db() as conn:
+        existing = conn.execute(
+            "SELECT * FROM platform_settings WHERE id = ?", (platform_id,)
+        ).fetchone()
+        if not existing:
+            raise HTTPException(status_code=404, detail="Platform setting not found")
+        conn.execute("DELETE FROM platform_settings WHERE id = ?", (platform_id,))
+    return {"message": "Platform deleted", "id": platform_id}
+
+
+# ══════════════════════════════════════════════════════════════════════
+# CUSTOMER PERSONAS
+# ══════════════════════════════════════════════════════════════════════
+
+
+@app.get("/api/settings/personas")
+async def list_personas():
+    """Get all customer personas."""
+    with get_db() as conn:
+        rows = conn.execute("SELECT * FROM customer_personas ORDER BY id").fetchall()
+    personas = []
+    for r in rows:
+        p = row_to_dict(r)
+        p["preferences"] = parse_json_field(p.get("preferences"), {})
+        p["platforms"] = parse_json_field(p.get("platforms"), [])
+        personas.append(p)
+    return {"personas": personas, "count": len(personas)}
+
+
+@app.post("/api/settings/personas", status_code=201)
+async def create_persona(body: PersonaCreateRequest):
+    """Create a new customer persona."""
+    with get_db() as conn:
+        cursor = conn.execute(
+            """INSERT INTO customer_personas (name, age_range, description, preferences, platforms)
+               VALUES (?, ?, ?, ?, ?)""",
+            (body.name, body.age_range, body.description,
+             json.dumps(body.preferences or {}), json.dumps(body.platforms or [])),
+        )
+        row = conn.execute(
+            "SELECT * FROM customer_personas WHERE id = ?", (cursor.lastrowid,)
+        ).fetchone()
+    result = row_to_dict(row)
+    result["preferences"] = parse_json_field(result.get("preferences"), {})
+    result["platforms"] = parse_json_field(result.get("platforms"), [])
+    return result
+
+
+@app.patch("/api/settings/personas/{persona_id}")
+async def update_persona(persona_id: int, body: PersonaUpdateRequest):
+    """Update an existing customer persona."""
+    with get_db() as conn:
+        existing = conn.execute(
+            "SELECT * FROM customer_personas WHERE id = ?", (persona_id,)
+        ).fetchone()
+        if not existing:
+            raise HTTPException(status_code=404, detail="Persona not found")
+
+        fields = []
+        values = []
+        if body.name is not None:
+            fields.append("name = ?")
+            values.append(body.name)
+        if body.age_range is not None:
+            fields.append("age_range = ?")
+            values.append(body.age_range)
+        if body.description is not None:
+            fields.append("description = ?")
+            values.append(body.description)
+        if body.preferences is not None:
+            fields.append("preferences = ?")
+            values.append(json.dumps(body.preferences))
+        if body.platforms is not None:
+            fields.append("platforms = ?")
+            values.append(json.dumps(body.platforms))
+
+        if not fields:
+            raise HTTPException(status_code=400, detail="No fields to update")
+
+        values.append(persona_id)
+        conn.execute(
+            f"UPDATE customer_personas SET {', '.join(fields)} WHERE id = ?", values
+        )
+        row = conn.execute(
+            "SELECT * FROM customer_personas WHERE id = ?", (persona_id,)
+        ).fetchone()
+
+    result = row_to_dict(row)
+    result["preferences"] = parse_json_field(result.get("preferences"), {})
+    result["platforms"] = parse_json_field(result.get("platforms"), [])
+    return result
+
+
+@app.delete("/api/settings/personas/{persona_id}")
+async def delete_persona(persona_id: int):
+    """Delete a customer persona."""
+    with get_db() as conn:
+        existing = conn.execute(
+            "SELECT * FROM customer_personas WHERE id = ?", (persona_id,)
+        ).fetchone()
+        if not existing:
+            raise HTTPException(status_code=404, detail="Persona not found")
+        conn.execute("DELETE FROM customer_personas WHERE id = ?", (persona_id,))
+    return {"message": "Persona deleted", "id": persona_id}
+
+
+# ══════════════════════════════════════════════════════════════════════
+# USER PREFERENCES
+# ══════════════════════════════════════════════════════════════════════
+
+
+@app.get("/api/settings/preferences")
+async def get_preferences():
+    """Get all user preferences."""
+    with get_db() as conn:
+        rows = conn.execute("SELECT * FROM user_preferences ORDER BY key").fetchall()
+    prefs = {r["key"]: r["value"] for r in rows}
+
+    # Return with defaults for unset preferences
+    defaults = {
+        "default_platforms": '["Gumroad","Twitter","Instagram"]',
+        "default_languages": '["en"]',
+        "default_plan_mode": "A",
+        "default_price_range": '{"min": 5, "max": 50}',
+        "default_product_type": "digital",
+        "notify_pipeline_complete": "true",
+        "notify_ab_test_winner": "true",
+        "notify_trend_alerts": "true",
+        "notify_goal_reached": "true",
+    }
+    for key, default_val in defaults.items():
+        if key not in prefs:
+            prefs[key] = default_val
+
+    return {"preferences": prefs}
+
+
+@app.put("/api/settings/preferences")
+async def update_preference(body: PreferenceUpdateRequest):
+    """Set a user preference (upsert)."""
+    with get_db() as conn:
+        conn.execute(
+            """INSERT INTO user_preferences (key, value, updated_at)
+               VALUES (?, ?, datetime('now'))
+               ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at""",
+            (body.key, body.value),
+        )
+    return {"key": body.key, "value": body.value}
+
+
+@app.get("/api/settings/api-keys")
+async def get_api_key_status():
+    """Get status of configured API keys (not the actual keys)."""
+    import os
+    keys = {
+        "GEMINI_API_KEY": bool(os.environ.get("GEMINI_API_KEY")),
+        "GROQ_API_KEY": bool(os.environ.get("GROQ_API_KEY")),
+        "CLOUDFLARE_API_TOKEN": bool(os.environ.get("CLOUDFLARE_API_TOKEN")),
+        "CLOUDFLARE_ACCOUNT_ID": bool(os.environ.get("CLOUDFLARE_ACCOUNT_ID")),
+        "CEREBRAS_API_KEY": bool(os.environ.get("CEREBRAS_API_KEY")),
+        "MISTRAL_API_KEY": bool(os.environ.get("MISTRAL_API_KEY")),
+        "ELEVENLABS_API_KEY": bool(os.environ.get("ELEVENLABS_API_KEY")),
+        "TELEGRAM_BOT_TOKEN": bool(os.environ.get("TELEGRAM_BOT_TOKEN")),
+        "TUMBLR_CONSUMER_KEY": bool(os.environ.get("TUMBLR_CONSUMER_KEY")),
+        "PINTEREST_ACCESS_TOKEN": bool(os.environ.get("PINTEREST_ACCESS_TOKEN")),
+    }
+    configured = sum(1 for v in keys.values() if v)
+    return {"keys": keys, "configured": configured, "total": len(keys)}
 
 
 # ══════════════════════════════════════════════════════════════════════

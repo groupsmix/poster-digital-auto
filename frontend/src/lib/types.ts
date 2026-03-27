@@ -448,3 +448,35 @@ export interface FAQSuggestion {
   provider: string | null;
   message: string;
 }
+
+// Settings types
+export interface PlatformSetting {
+  id: number;
+  platform: string;
+  tone: string;
+  plan_mode: string;
+  enabled: number | boolean;
+  max_title_length: number;
+  max_description_length: number;
+  custom_instructions: string;
+}
+
+export interface CustomerPersona {
+  id: number;
+  name: string;
+  age_range: string;
+  description: string;
+  preferences: Record<string, unknown>;
+  platforms: string[];
+  created_at: string;
+}
+
+export interface APIKeyStatus {
+  keys: Record<string, boolean>;
+  configured: number;
+  total: number;
+}
+
+export interface UserPreferences {
+  [key: string]: string;
+}
