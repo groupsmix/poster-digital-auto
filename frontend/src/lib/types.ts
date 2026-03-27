@@ -448,3 +448,47 @@ export interface FAQSuggestion {
   provider: string | null;
   message: string;
 }
+
+// Settings types
+export interface PlatformSetting {
+  id: number;
+  platform: string;
+  type: string;
+  tone: string;
+  plan_mode: string;
+  enabled: number;
+  max_title_length: number;
+  max_description_length: number;
+  custom_instructions: string;
+}
+
+export interface CustomerPersona {
+  id: number;
+  name: string;
+  age_range: string;
+  description: string;
+  preferences: Record<string, unknown>;
+  platforms: string[];
+  created_at: string;
+}
+
+export interface APIKeyStatus {
+  env_var: string;
+  name: string;
+  priority: string;
+  configured: boolean;
+  masked_value: string;
+}
+
+export interface SettingsPreferences {
+  default_platforms: string[];
+  default_languages: string[];
+  default_plan_mode: string;
+  default_price_range: { min: number; max: number };
+  notification_niche_finder: boolean;
+  notification_trend_alerts: boolean;
+  notification_ceo_rejections: boolean;
+  notification_revenue_milestones: boolean;
+  notification_method: string;
+  [key: string]: unknown;
+}

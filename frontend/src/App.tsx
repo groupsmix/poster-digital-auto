@@ -14,6 +14,7 @@ import TrendsPage from "@/pages/TrendsPage";
 import ABTestsPage from "@/pages/ABTestsPage";
 import RevenueGoalsPage from "@/pages/RevenueGoalsPage";
 import FAQManagerPage from "@/pages/FAQManagerPage";
+import SettingsPage from "@/pages/SettingsPage";
 
 function App() {
   return (
@@ -35,6 +36,7 @@ function App() {
             <Route path="/ab-tests" element={<ABTestsPage />} />
             <Route path="/goals" element={<RevenueGoalsPage />} />
             <Route path="/faq" element={<FAQManagerPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
           </Routes>
         </main>
         <Toaster

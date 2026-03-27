@@ -11,6 +11,7 @@ import type {
   RevenueGoal,
   RepurposedContent, RepurposeResult, VoiceOverResult,
   FAQEntry, FAQSuggestion,
+  PlatformSetting, CustomerPersona, APIKeyStatus, SettingsPreferences,
 } from "./types";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
@@ -384,4 +385,102 @@ export async function suggestFAQAnswer(question: string): Promise<FAQSuggestion>
     method: "POST",
     body: JSON.stringify({ question }),
   });
+}
+
+// Settings - Platform Management
+export async function fetchPlatformSettings(): Promise<{ platforms: PlatformSetting[] }> {
+  return request("/api/settings/platforms");
+}
+
+export async function createPlatformSetting(data: {
+  name: string;
+  type: string;
+  tone: string;
+  plan_mode: string;
+  max_title_length: number;
+  max_description_length: number;
+  custom_instructions: string;
+  enabled: boolean;
+}): Promise<PlatformSetting> {
+  return request<PlatformSetting>("/api/settings/platforms", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updatePlatformSetting(
+  id: number,
+  data: Partial<{
+    tone: string;
+    plan_mode: string;
+    enabled: boolean;
+    max_title_length: number;
+    max_description_length: number;
+    custom_instructions: string;
+    type: string;
+  }>,
+): Promise<PlatformSetting> {
+  return request<PlatformSetting>(`/api/settings/platforms/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deletePlatformSetting(id: number): Promise<{ message: string }> {
+  return request(`/api/settings/platforms/${id}`, { method: "DELETE" });
+}
+
+// Settings - Customer Personas
+export async function fetchPersonas(): Promise<{ personas: CustomerPersona[]; count: number }> {
+  return request("/api/settings/personas");
+}
+
+export async function createPersona(data: {
+  name: string;
+  age_range: string;
+  description: string;
+  preferences: Record<string, unknown>;
+  platforms: string[];
+}): Promise<CustomerPersona> {
+  return request<CustomerPersona>("/api/settings/personas", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updatePersona(
+  id: number,
+  data: Partial<{
+    name: string;
+    age_range: string;
+    description: string;
+    preferences: Record<string, unknown>;
+    platforms: string[];
+  }>,
+): Promise<CustomerPersona> {
+  return request<CustomerPersona>(`/api/settings/personas/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deletePersona(id: number): Promise<{ message: string }> {
+  return request(`/api/settings/personas/${id}`, { method: "DELETE" });
+}
+
+// Settings - Preferences
+export async function fetchPreferences(): Promise<{ preferences: SettingsPreferences }> {
+  return request("/api/settings/preferences");
+}
+
+export async function updatePreference(key: string, value: unknown): Promise<{ key: string; value: unknown }> {
+  return request("/api/settings/preferences", {
+    method: "PATCH",
+    body: JSON.stringify({ key, value }),
+  });
+}
+
+// Settings - API Key Status
+export async function fetchAPIKeyStatus(): Promise<{ api_keys: APIKeyStatus[]; configured_count: number; total_count: number }> {
+  return request("/api/settings/api-keys");
 }
