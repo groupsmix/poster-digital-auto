@@ -1,4 +1,9 @@
-import type { Product, ProductCreate, Stats, AIProvider, SocialPost, AutoPostConfig, CalendarPost, ScheduleSuggestion } from "./types";
+import type {
+  Product, ProductCreate, Stats, AIProvider, SocialPost, AutoPostConfig,
+  AnalyticsOverview, RevenueDataPoint, PlatformPerformance, TopProduct,
+  CeoTrendPoint, AIProviderUsage, Insight,
+  CalendarPost, ScheduleSuggestion,
+} from "./types";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -84,6 +89,59 @@ export async function generateCaptions(productId: number): Promise<unknown> {
 
 export async function fetchAutoPostConfig(): Promise<AutoPostConfig> {
   return request<AutoPostConfig>("/api/auto-post/config");
+}
+
+// Analytics
+export async function fetchAnalyticsOverview(): Promise<AnalyticsOverview> {
+  return request<AnalyticsOverview>("/api/analytics/overview");
+}
+
+export async function fetchRevenue(period: string = "30d"): Promise<{ period: string; data: RevenueDataPoint[]; count: number }> {
+  return request(`/api/analytics/revenue?period=${encodeURIComponent(period)}`);
+}
+
+export async function fetchPlatformPerformance(): Promise<{ platforms: PlatformPerformance[]; count: number }> {
+  return request("/api/analytics/platforms");
+}
+
+export async function fetchTopProducts(limit: number = 10): Promise<{ products: TopProduct[] }> {
+  return request(`/api/analytics/top-products?limit=${limit}`);
+}
+
+export async function fetchCeoTrend(): Promise<{ trend: CeoTrendPoint[] }> {
+  return request("/api/analytics/ceo-trend");
+}
+
+export async function fetchAIUsage(): Promise<{ providers: AIProviderUsage[] }> {
+  return request("/api/analytics/ai-usage");
+}
+
+export async function fetchInsights(): Promise<{ insights: Insight[] }> {
+  return request("/api/analytics/insights");
+}
+
+export async function logManualSale(data: {
+  product_id: number;
+  platform: string;
+  revenue: number;
+  date?: string;
+}): Promise<Record<string, unknown>> {
+  return request("/api/analytics/manual-sale", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function importSalesCsv(file: File): Promise<{ imported: number; errors: string[]; message: string }> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const API = import.meta.env.VITE_API_URL || "http://localhost:8000";
+  const res = await fetch(`${API}/api/analytics/import-csv`, { method: "POST", body: formData });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || res.statusText);
+  }
+  return res.json();
 }
 
 // Calendar & Scheduler
