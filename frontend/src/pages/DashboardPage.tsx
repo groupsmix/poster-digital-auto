@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Package, Clock, CheckCircle, Send, AlertTriangle, PlusCircle, Cpu, ArrowRight, TrendingUp, Zap } from "lucide-react";
-import { fetchStats, fetchProducts, fetchTrendAlerts } from "@/lib/api";
-import type { Stats, Product, TrendPrediction } from "@/lib/types";
+import { Package, Clock, CheckCircle, Send, AlertTriangle, PlusCircle, Cpu, ArrowRight, TrendingUp, Zap, Target } from "lucide-react";
+import { fetchStats, fetchProducts, fetchTrendAlerts, fetchGoals } from "@/lib/api";
+import type { Stats, Product, TrendPrediction, RevenueGoal } from "@/lib/types";
 import StatusBadge from "@/components/StatusBadge";
 import Spinner from "@/components/Spinner";
 
@@ -26,14 +26,16 @@ export default function DashboardPage() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [recent, setRecent] = useState<Product[]>([]);
   const [trendAlerts, setTrendAlerts] = useState<TrendPrediction[]>([]);
+  const [activeGoal, setActiveGoal] = useState<RevenueGoal | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all([fetchStats(), fetchProducts(), fetchTrendAlerts()])
-      .then(([s, p, t]) => {
+    Promise.all([fetchStats(), fetchProducts(), fetchTrendAlerts(), fetchGoals()])
+      .then(([s, p, t, g]) => {
         setStats(s);
         setRecent(p.products.slice(0, 10));
         setTrendAlerts(t.alerts || []);
+        setActiveGoal(g.active_goal);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -91,6 +93,36 @@ export default function DashboardPage() {
         <StatCard label="Posted" value={byStatus.published || 0} icon={Send} color="bg-blue-500/20 text-blue-400" />
         <StatCard label="Errors" value={byStatus.rejected || 0} icon={AlertTriangle} color="bg-red-500/20 text-red-400" />
       </div>
+
+      {/* Revenue Goal Widget */}
+      {activeGoal && (
+        <Link
+          to="/goals"
+          className="block rounded-xl border border-zinc-800 bg-zinc-900/50 p-5 transition-colors hover:border-violet-500/50"
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Target className="h-5 w-5 text-violet-400" />
+              <h3 className="font-semibold text-zinc-200">Revenue Goal</h3>
+            </div>
+            <span className="text-sm text-zinc-400">
+              ${activeGoal.current_amount.toFixed(0)} / ${activeGoal.target_amount.toFixed(0)} {activeGoal.period}
+            </span>
+          </div>
+          <div className="mt-3 h-3 overflow-hidden rounded-full bg-zinc-800">
+            <div
+              className={`h-full rounded-full transition-all ${activeGoal.progress_percent >= 100 ? "bg-emerald-500" : activeGoal.progress_percent >= 75 ? "bg-blue-500" : activeGoal.progress_percent >= 50 ? "bg-yellow-500" : "bg-red-500"}`}
+              style={{ width: `${Math.min(activeGoal.progress_percent, 100)}%` }}
+            />
+          </div>
+          <div className="mt-2 flex items-center justify-between text-xs text-zinc-400">
+            <span>{activeGoal.progress_percent}% complete</span>
+            {activeGoal.sales_needed > 0 && (
+              <span>{activeGoal.sales_needed} sales needed</span>
+            )}
+          </div>
+        </Link>
+      )}
 
       {/* Quick Actions */}
       <div className="grid gap-4 sm:grid-cols-3">

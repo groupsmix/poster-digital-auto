@@ -1,14 +1,14 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
-import { ArrowLeft, Copy, Download, Check, ClipboardList, Send, Edit3, Shuffle, X, Globe } from "lucide-react";
-import { fetchProduct, generateCaptions, triggerAutoPost, updateSocialPost, fetchAutoPostConfig, remixProduct, fetchRemixChildren } from "@/lib/api";
-import type { Product, AutoPostConfig } from "@/lib/types";
+import { ArrowLeft, Copy, Download, Check, ClipboardList, Send, Edit3, Shuffle, X, Globe, FlaskConical, DollarSign, Mail, Loader2, Tag, Clock, Package, Zap } from "lucide-react";
+import { fetchProduct, generateCaptions, triggerAutoPost, updateSocialPost, fetchAutoPostConfig, remixProduct, fetchRemixChildren, createABTest, fetchPriceSuggestions, generateEmailCampaign, fetchEmailCampaign } from "@/lib/api";
+import type { Product, AutoPostConfig, PriceSuggestions, EmailCampaign } from "@/lib/types";
 import StatusBadge from "@/components/StatusBadge";
 import CeoScoreBadge from "@/components/CeoScoreBadge";
 import Spinner from "@/components/Spinner";
 import { toast } from "sonner";
 
-type Tab = "copy" | "research" | "social" | "logs";
+type Tab = "copy" | "research" | "social" | "email" | "pricing" | "logs";
 
 const REMIX_TYPE_OPTIONS = [
   { key: "audience", label: "Audience", description: "Student, Business, Family, Freelancer" },
@@ -314,6 +314,338 @@ function SocialPostsTab({
   );
 }
 
+function ABTestButton({ variantId }: { variantId: number }) {
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<{ strategies?: Record<string, string>; insights?: string } | null>(null);
+
+  async function handleCreateTest() {
+    setLoading(true);
+    try {
+      const res = await createABTest(variantId);
+      setResult({ strategies: res.strategies, insights: res.insights });
+      toast.success(res.message);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "A/B test creation failed");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="rounded-lg border border-zinc-700 bg-zinc-800/50 p-3">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <FlaskConical className="h-4 w-4 text-violet-400" />
+          <span className="text-xs font-medium text-zinc-300">A/B Testing</span>
+        </div>
+        <button
+          onClick={handleCreateTest}
+          disabled={loading}
+          className="inline-flex items-center gap-1.5 rounded-md bg-violet-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-violet-500 disabled:opacity-50"
+        >
+          {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <FlaskConical className="h-3 w-3" />}
+          {loading ? "Creating..." : "A/B Test"}
+        </button>
+      </div>
+      {result && (
+        <div className="mt-3 space-y-2">
+          {result.strategies && Object.entries(result.strategies).map(([key, val]) => (
+            <div key={key} className="flex items-start gap-2">
+              <span className="rounded bg-violet-500/20 px-1.5 py-0.5 text-[10px] font-bold text-violet-300">{key}</span>
+              <span className="text-xs text-zinc-400">{val}</span>
+            </div>
+          ))}
+          {result.insights && (
+            <p className="text-xs italic text-zinc-500">{result.insights}</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function EmailTab({ product }: { product: Product }) {
+  const [campaign, setCampaign] = useState<EmailCampaign | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [fetching, setFetching] = useState(true);
+
+  useEffect(() => {
+    fetchEmailCampaign(product.id)
+      .then(setCampaign)
+      .catch(() => {})
+      .finally(() => setFetching(false));
+  }, [product.id]);
+
+  async function handleGenerate() {
+    setLoading(true);
+    try {
+      const res = await generateEmailCampaign(product.id);
+      setCampaign(res.campaign);
+      toast.success(res.message);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Email generation failed");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (fetching) {
+    return (
+      <div className="flex justify-center py-10">
+        <Spinner className="h-6 w-6" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center gap-3">
+        <button
+          onClick={handleGenerate}
+          disabled={loading}
+          className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-500 disabled:opacity-50"
+        >
+          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
+          {loading ? "Generating..." : campaign ? "Regenerate Campaign" : "Generate Email Campaign"}
+        </button>
+      </div>
+
+      {!campaign ? (
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-10 text-center">
+          <Mail className="mx-auto h-10 w-10 text-zinc-600" />
+          <p className="mt-3 text-zinc-400">No email campaign yet. Click &ldquo;Generate Email Campaign&rdquo; to create one.</p>
+        </div>
+      ) : (
+        <div className="space-y-6">
+          {/* Subject Lines */}
+          <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-5">
+            <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-zinc-200">
+              <Tag className="h-4 w-4 text-violet-400" />
+              Subject Line Variations
+            </h3>
+            <div className="space-y-2">
+              {campaign.subject_lines.map((subject, i) => (
+                <div key={i} className="flex items-center justify-between rounded-lg bg-zinc-800/50 p-3">
+                  <span className="text-sm text-zinc-200">{subject}</span>
+                  <CopyButton text={subject} label={`Subject ${i + 1}`} />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Promo Email */}
+          {campaign.email_body && (
+            <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-5">
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="flex items-center gap-2 text-sm font-semibold text-zinc-200">
+                  <Send className="h-4 w-4 text-emerald-400" />
+                  Launch Email
+                </h3>
+                <CopyButton
+                  text={`Subject: ${campaign.email_body.subject}\n\n${campaign.email_body.body}`}
+                  label="Launch email"
+                />
+              </div>
+              <div className="rounded-lg bg-zinc-800/50 p-3">
+                <p className="mb-2 text-xs font-medium text-zinc-400">Subject: {campaign.email_body.subject}</p>
+                <p className="whitespace-pre-wrap text-sm text-zinc-200">{campaign.email_body.body}</p>
+              </div>
+            </div>
+          )}
+
+          {/* Day 3 Follow-up */}
+          {campaign.follow_up_day3 && (
+            <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-5">
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="flex items-center gap-2 text-sm font-semibold text-zinc-200">
+                  <Clock className="h-4 w-4 text-yellow-400" />
+                  Day 3 Follow-up (Tip/Value)
+                </h3>
+                <CopyButton
+                  text={`Subject: ${campaign.follow_up_day3.subject}\n\n${campaign.follow_up_day3.body}`}
+                  label="Day 3 email"
+                />
+              </div>
+              <div className="rounded-lg bg-zinc-800/50 p-3">
+                <p className="mb-2 text-xs font-medium text-zinc-400">Subject: {campaign.follow_up_day3.subject}</p>
+                <p className="whitespace-pre-wrap text-sm text-zinc-200">{campaign.follow_up_day3.body}</p>
+              </div>
+            </div>
+          )}
+
+          {/* Day 7 Follow-up */}
+          {campaign.follow_up_day7 && (
+            <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-5">
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="flex items-center gap-2 text-sm font-semibold text-zinc-200">
+                  <Package className="h-4 w-4 text-fuchsia-400" />
+                  Day 7 Follow-up (Upsell)
+                </h3>
+                <CopyButton
+                  text={`Subject: ${campaign.follow_up_day7.subject}\n\n${campaign.follow_up_day7.body}`}
+                  label="Day 7 email"
+                />
+              </div>
+              <div className="rounded-lg bg-zinc-800/50 p-3">
+                <p className="mb-2 text-xs font-medium text-zinc-400">Subject: {campaign.follow_up_day7.subject}</p>
+                <p className="whitespace-pre-wrap text-sm text-zinc-200">{campaign.follow_up_day7.body}</p>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PricingTab({ product }: { product: Product }) {
+  const [pricing, setPricing] = useState<PriceSuggestions | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  async function handleFetchPricing() {
+    setLoading(true);
+    try {
+      const res = await fetchPriceSuggestions(product.id);
+      setPricing(res);
+      toast.success("Price suggestions generated!");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Pricing failed");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const s = pricing?.suggestions;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center gap-3">
+        <button
+          onClick={handleFetchPricing}
+          disabled={loading}
+          className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+        >
+          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <DollarSign className="h-4 w-4" />}
+          {loading ? "Analyzing..." : pricing ? "Refresh Pricing" : "Get AI Price Suggestions"}
+        </button>
+      </div>
+
+      {!s ? (
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-10 text-center">
+          <DollarSign className="mx-auto h-10 w-10 text-zinc-600" />
+          <p className="mt-3 text-zinc-400">Click &ldquo;Get AI Price Suggestions&rdquo; to analyze optimal pricing.</p>
+        </div>
+      ) : (
+        <div className="space-y-6">
+          {/* Base Price & Confidence */}
+          <div className="flex items-center gap-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-5">
+            <div className="rounded-lg bg-emerald-500/20 p-3">
+              <DollarSign className="h-6 w-6 text-emerald-400" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-emerald-300">{s.base_price}</p>
+              <p className="text-sm text-zinc-400">Recommended Base Price</p>
+            </div>
+            {s.confidence && (
+              <div className="ml-auto text-right">
+                <p className="text-lg font-semibold text-zinc-200">{s.confidence}%</p>
+                <p className="text-xs text-zinc-500">Confidence</p>
+              </div>
+            )}
+          </div>
+
+          {/* Platform Prices */}
+          {s.platform_prices && Object.keys(s.platform_prices).length > 0 && (
+            <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-5">
+              <h3 className="mb-3 text-sm font-semibold text-zinc-200">Platform-Specific Pricing</h3>
+              <div className="grid gap-3 sm:grid-cols-3">
+                {Object.entries(s.platform_prices).map(([platform, data]) => (
+                  <div key={platform} className="rounded-lg border border-zinc-700 bg-zinc-800/50 p-3">
+                    <p className="text-xs font-medium text-zinc-400">{platform}</p>
+                    <p className="mt-1 text-lg font-bold text-emerald-300">{data.price}</p>
+                    <p className="mt-1 text-xs text-zinc-500">{data.reasoning}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Launch Pricing */}
+          {s.launch_pricing && (
+            <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-5">
+              <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-zinc-200">
+                <Zap className="h-4 w-4 text-yellow-400" />
+                Launch Pricing Strategy
+              </h3>
+              <div className="flex items-center gap-4">
+                <div className="rounded-lg bg-yellow-500/10 p-3 text-center">
+                  <p className="text-xl font-bold text-yellow-300">{s.launch_pricing.launch_price}</p>
+                  <p className="text-xs text-zinc-400">for {s.launch_pricing.launch_duration_hours}h</p>
+                </div>
+                <span className="text-zinc-500">&rarr;</span>
+                <div className="rounded-lg bg-zinc-800 p-3 text-center">
+                  <p className="text-xl font-bold text-zinc-200">{s.launch_pricing.regular_price}</p>
+                  <p className="text-xs text-zinc-400">regular</p>
+                </div>
+              </div>
+              <p className="mt-2 text-xs text-zinc-500">{s.launch_pricing.reasoning}</p>
+            </div>
+          )}
+
+          {/* Bundle Pricing */}
+          {s.bundle_pricing && (
+            <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-5">
+              <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-zinc-200">
+                <Package className="h-4 w-4 text-fuchsia-400" />
+                Bundle Pricing
+              </h3>
+              <div className="flex items-center gap-3">
+                <div className="rounded-lg bg-zinc-800 p-3 text-center">
+                  <p className="text-sm text-zinc-400 line-through">{s.bundle_pricing.individual_total}</p>
+                  <p className="text-xs text-zinc-500">individual</p>
+                </div>
+                <span className="text-zinc-500">&rarr;</span>
+                <div className="rounded-lg bg-fuchsia-500/10 p-3 text-center">
+                  <p className="text-xl font-bold text-fuchsia-300">{s.bundle_pricing.bundle_3_price}</p>
+                  <p className="text-xs text-zinc-400">bundle of 3</p>
+                </div>
+                <span className="rounded bg-emerald-500/20 px-2 py-1 text-xs font-medium text-emerald-300">
+                  Save {s.bundle_pricing.savings_percent}
+                </span>
+              </div>
+              <p className="mt-2 text-xs text-zinc-500">{s.bundle_pricing.reasoning}</p>
+            </div>
+          )}
+
+          {/* Pricing Tiers */}
+          {s.pricing_tiers && s.pricing_tiers.length > 0 && (
+            <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-5">
+              <h3 className="mb-3 text-sm font-semibold text-zinc-200">Pricing Tiers</h3>
+              <div className="grid gap-3 sm:grid-cols-3">
+                {s.pricing_tiers.map((tier, i) => (
+                  <div key={i} className={`rounded-lg border p-4 ${i === 1 ? "border-violet-500 bg-violet-500/10" : "border-zinc-700 bg-zinc-800/50"}`}>
+                    <p className="text-xs font-medium text-zinc-400">{tier.tier}</p>
+                    <p className="mt-1 text-xl font-bold text-zinc-200">{tier.price}</p>
+                    <p className="mt-2 text-xs text-zinc-500">{tier.includes}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Competitor Analysis */}
+          {s.competitor_analysis && (
+            <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-5">
+              <h3 className="mb-2 text-sm font-semibold text-zinc-200">Competitor Analysis</h3>
+              <p className="text-sm text-zinc-400">{s.competitor_analysis}</p>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ProductDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -378,6 +710,8 @@ export default function ProductDetailPage() {
     { key: "copy", label: "Copy Center" },
     { key: "research", label: "Research" },
     { key: "social", label: "Social Posts" },
+    { key: "email", label: "Email" },
+    { key: "pricing", label: "Pricing" },
     { key: "logs", label: "Pipeline Logs" },
   ];
 
@@ -628,6 +962,9 @@ export default function ProductDetailPage() {
                       </div>
                     )}
 
+                    {/* A/B Test Button */}
+                    <ABTestButton variantId={v.id} />
+
                     {/* CEO Feedback */}
                     {v.ceo_feedback && (
                       <div>
@@ -670,6 +1007,14 @@ export default function ProductDetailPage() {
               ))}
             </>
           )}
+        </div>
+      )}
+
+      {tab === "copy" && product.variants && product.variants.length > 0 && (
+        <div className="mt-4 flex items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900/50 p-3">
+          <FlaskConical className="h-4 w-4 text-violet-400" />
+          <span className="text-sm text-zinc-400">Want to test which title converts best?</span>
+          <span className="text-xs text-zinc-500">Click the A/B Test button on any variant above.</span>
         </div>
       )}
 
@@ -720,6 +1065,14 @@ export default function ProductDetailPage() {
 
       {tab === "social" && (
         <SocialPostsTab product={product} setProduct={setProduct} />
+      )}
+
+      {tab === "email" && (
+        <EmailTab product={product} />
+      )}
+
+      {tab === "pricing" && (
+        <PricingTab product={product} />
       )}
 
       {tab === "logs" && (

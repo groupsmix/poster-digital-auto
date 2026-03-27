@@ -34,6 +34,13 @@ from app.agents.trend_predictor import (
     get_all_trends,
     run_trend_scan,
 )
+from app.ab_testing import (
+    create_ab_test,
+    detect_winner,
+    get_ab_patterns,
+    get_ab_tests,
+    record_ab_sale,
+)
 from app.ai_failover import (
     get_all_provider_statuses,
     load_provider_statuses_from_db,
@@ -51,6 +58,7 @@ from app.analytics import (
     import_sales_csv,
     record_event,
 )
+from app.email_marketing import generate_email_campaign, get_email_campaign
 from app.calendar_scheduler import (
     auto_schedule_posts,
     batch_schedule_products,
@@ -63,6 +71,12 @@ from app.calendar_scheduler import (
     unschedule_post,
 )
 from app.database import get_db, init_db, seed_ai_status, seed_platform_settings
+from app.revenue_goals import create_goal, get_active_goal, get_goals, update_goal_progress
+from app.smart_pricing import (
+    calculate_bundle_pricing,
+    calculate_launch_pricing,
+    get_price_suggestions,
+)
 
 # Load environment variables
 load_dotenv()
@@ -216,6 +230,27 @@ class BatchScheduleRequest(BaseModel):
 
 class RemixRequest(BaseModel):
     remix_types: list[str] | None = None
+
+
+class ABSaleRequest(BaseModel):
+    variant_id: int
+    revenue: float
+
+
+class GoalCreateRequest(BaseModel):
+    target_amount: float
+    period: str = "monthly"
+
+
+class LaunchPricingRequest(BaseModel):
+    regular_price: float
+    discount_percent: float = 40
+    duration_hours: int = 48
+
+
+class BundlePricingRequest(BaseModel):
+    prices: list[float]
+    discount_percent: float = 25
 
 
 # ── Helper Functions ──────────────────────────────────────────────────
@@ -1085,4 +1120,146 @@ async def create_from_trend(trend_id: int):
     result = await create_product_from_trend(trend_id)
     if not result["success"]:
         raise HTTPException(status_code=404, detail=result["message"])
+    return result
+
+
+# ══════════════════════════════════════════════════════════════════════
+# A/B TESTING
+# ══════════════════════════════════════════════════════════════════════
+
+
+@app.post("/api/variants/{variant_id}/ab-test")
+async def create_variant_ab_test(variant_id: int):
+    """Create an A/B/C test for a variant.
+
+    AI generates 3 different versions of the title/description.
+    """
+    result = await create_ab_test(variant_id)
+    if not result["success"]:
+        raise HTTPException(status_code=400, detail=result["message"])
+    return result
+
+
+@app.get("/api/ab-tests")
+async def list_ab_tests(
+    status: str | None = Query(None, description="Filter by status: running, completed"),
+):
+    """List all A/B tests with variant data and sales metrics."""
+    tests = get_ab_tests(status=status)
+    return {"tests": tests, "count": len(tests)}
+
+
+@app.post("/api/ab-tests/{test_id}/sale")
+async def log_ab_sale(test_id: int, body: ABSaleRequest):
+    """Record a sale for a specific variant in an A/B test."""
+    result = record_ab_sale(test_id, body.variant_id, body.revenue)
+    if not result["success"]:
+        raise HTTPException(status_code=400, detail=result["message"])
+    return result
+
+
+@app.post("/api/ab-tests/{test_id}/detect-winner")
+async def ab_detect_winner(test_id: int):
+    """Manually trigger winner detection for an A/B test."""
+    result = detect_winner(test_id)
+    return result
+
+
+@app.get("/api/ab-tests/patterns")
+async def ab_patterns():
+    """Get learned patterns from completed A/B tests."""
+    patterns = get_ab_patterns()
+    return {"patterns": patterns, "count": len(patterns)}
+
+
+# ══════════════════════════════════════════════════════════════════════
+# SMART PRICING
+# ══════════════════════════════════════════════════════════════════════
+
+
+@app.get("/api/products/{product_id}/pricing")
+async def product_pricing(product_id: int):
+    """Get AI-powered price suggestions for a product."""
+    result = await get_price_suggestions(product_id)
+    if not result["success"]:
+        raise HTTPException(status_code=400, detail=result["message"])
+    return result
+
+
+@app.post("/api/pricing/launch")
+async def launch_pricing(body: LaunchPricingRequest):
+    """Calculate launch pricing (discount for limited time)."""
+    result = calculate_launch_pricing(
+        regular_price=body.regular_price,
+        discount_percent=body.discount_percent,
+        duration_hours=body.duration_hours,
+    )
+    return result
+
+
+@app.post("/api/pricing/bundle")
+async def bundle_pricing(body: BundlePricingRequest):
+    """Calculate bundle pricing for multiple products."""
+    if len(body.prices) < 2:
+        raise HTTPException(status_code=400, detail="Need at least 2 prices for a bundle")
+    result = calculate_bundle_pricing(
+        individual_prices=body.prices,
+        bundle_discount_percent=body.discount_percent,
+    )
+    return result
+
+
+# ══════════════════════════════════════════════════════════════════════
+# EMAIL MARKETING
+# ══════════════════════════════════════════════════════════════════════
+
+
+@app.post("/api/products/{product_id}/email")
+async def generate_email(product_id: int):
+    """Generate an email marketing campaign for a product.
+
+    Creates 3 subject line variations, promo email body,
+    day 3 follow-up, and day 7 follow-up.
+    """
+    result = await generate_email_campaign(product_id)
+    if not result["success"]:
+        raise HTTPException(status_code=400, detail=result["message"])
+    return result
+
+
+@app.get("/api/products/{product_id}/email")
+async def get_email(product_id: int):
+    """Get the email campaign for a product."""
+    campaign = get_email_campaign(product_id)
+    if not campaign:
+        raise HTTPException(status_code=404, detail="No email campaign found for this product")
+    return campaign
+
+
+# ══════════════════════════════════════════════════════════════════════
+# REVENUE GOALS
+# ══════════════════════════════════════════════════════════════════════
+
+
+@app.post("/api/goals")
+async def create_revenue_goal(body: GoalCreateRequest):
+    """Set a revenue target goal."""
+    result = create_goal(body.target_amount, body.period)
+    if not result["success"]:
+        raise HTTPException(status_code=400, detail=result["message"])
+    return result
+
+
+@app.get("/api/goals")
+async def list_goals():
+    """Get all revenue goals with current progress."""
+    goals = get_goals()
+    active = get_active_goal()
+    return {"goals": goals, "active_goal": active, "count": len(goals)}
+
+
+@app.post("/api/goals/refresh")
+async def refresh_goals():
+    """Recalculate progress for all active goals."""
+    result = update_goal_progress()
     return result
