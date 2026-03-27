@@ -25,6 +25,10 @@ env/
 # Database
 *.db
 
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
 # OS
 .DS_Store
 Thumbs.db

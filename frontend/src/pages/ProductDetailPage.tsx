@@ -1,0 +1,349 @@
+import { useEffect, useState } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import { ArrowLeft, Copy, Download, Check } from "lucide-react";
+import { fetchProduct } from "@/lib/api";
+import type { Product } from "@/lib/types";
+import StatusBadge from "@/components/StatusBadge";
+import CeoScoreBadge from "@/components/CeoScoreBadge";
+import Spinner from "@/components/Spinner";
+import { toast } from "sonner";
+
+type Tab = "copy" | "research" | "social" | "logs";
+
+function CopyButton({ text, label }: { text: string; label: string }) {
+  const [copied, setCopied] = useState(false);
+
+  function handleCopy() {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      toast.success(`${label} copied!`);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
+
+  return (
+    <button
+      onClick={handleCopy}
+      className="inline-flex items-center gap-1 rounded-md border border-zinc-700 bg-zinc-800 px-2 py-1 text-xs font-medium text-zinc-300 transition-colors hover:bg-zinc-700"
+    >
+      {copied ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
+      {copied ? "Copied" : "Copy"}
+    </button>
+  );
+}
+
+export default function ProductDetailPage() {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const [product, setProduct] = useState<Product | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState<Tab>("copy");
+
+  useEffect(() => {
+    if (!id) return;
+    fetchProduct(Number(id))
+      .then(setProduct)
+      .catch((e) => {
+        toast.error(e.message);
+        navigate("/products");
+      })
+      .finally(() => setLoading(false));
+  }, [id, navigate]);
+
+  if (loading) {
+    return (
+      <div className="flex justify-center py-32">
+        <Spinner className="h-8 w-8" />
+      </div>
+    );
+  }
+
+  if (!product) return null;
+
+  const tabs: { key: Tab; label: string }[] = [
+    { key: "copy", label: "Copy Center" },
+    { key: "research", label: "Research" },
+    { key: "social", label: "Social Posts" },
+    { key: "logs", label: "Pipeline Logs" },
+  ];
+
+  const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:8000";
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3">
+          <button onClick={() => navigate("/products")} className="rounded-md p-1 text-zinc-400 hover:text-zinc-200">
+            <ArrowLeft className="h-5 w-5" />
+          </button>
+          <div>
+            <h1 className="text-2xl font-bold">{product.name}</h1>
+            <div className="mt-1 flex items-center gap-2">
+              <StatusBadge status={product.status} />
+              <span className="text-sm text-zinc-500">Plan {product.plan_mode}</span>
+              <span className="text-sm text-zinc-500">
+                {product.target_platforms.join(", ")}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex gap-1 overflow-x-auto border-b border-zinc-800">
+        {tabs.map((t) => (
+          <button
+            key={t.key}
+            onClick={() => setTab(t.key)}
+            className={`whitespace-nowrap border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
+              tab === t.key
+                ? "border-violet-500 text-violet-400"
+                : "border-transparent text-zinc-400 hover:border-zinc-600 hover:text-zinc-300"
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Tab Content */}
+      {tab === "copy" && (
+        <div className="space-y-6">
+          {(!product.variants || product.variants.length === 0) ? (
+            <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-10 text-center">
+              <p className="text-zinc-400">No variants generated yet. Run the AI pipeline to generate content.</p>
+            </div>
+          ) : (
+            product.variants.map((v) => (
+              <div key={v.id} className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-6">
+                <div className="flex flex-wrap items-center gap-3 border-b border-zinc-800 pb-4">
+                  <span className="rounded bg-violet-500/20 px-2.5 py-1 text-sm font-semibold text-violet-300">
+                    {v.platform}
+                  </span>
+                  {v.ceo_score > 0 && <CeoScoreBadge score={v.ceo_score} />}
+                  <StatusBadge status={v.ceo_status} />
+                  {v.price && (
+                    <span className="text-sm font-semibold text-emerald-400">{v.price}</span>
+                  )}
+                </div>
+
+                <div className="mt-4 space-y-4">
+                  {/* Title */}
+                  {v.title && (
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-medium uppercase tracking-wider text-zinc-500">Title</label>
+                        <CopyButton text={v.title} label="Title" />
+                      </div>
+                      <p className="mt-1 rounded-lg bg-zinc-800/50 p-3 text-sm text-zinc-200">{v.title}</p>
+                    </div>
+                  )}
+
+                  {/* Description */}
+                  {v.description && (
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-medium uppercase tracking-wider text-zinc-500">Description</label>
+                        <CopyButton text={v.description} label="Description" />
+                      </div>
+                      <p className="mt-1 whitespace-pre-wrap rounded-lg bg-zinc-800/50 p-3 text-sm text-zinc-200">
+                        {v.description}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Tags */}
+                  {v.tags && v.tags.length > 0 && (
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-medium uppercase tracking-wider text-zinc-500">Tags</label>
+                        <CopyButton text={v.tags.join(", ")} label="Tags" />
+                      </div>
+                      <div className="mt-1 flex flex-wrap gap-1.5">
+                        {v.tags.map((tag, i) => (
+                          <span key={i} className="rounded-full bg-zinc-800 px-2.5 py-0.5 text-xs text-zinc-300">
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* CEO Feedback */}
+                  {v.ceo_feedback && (
+                    <div>
+                      <label className="text-xs font-medium uppercase tracking-wider text-zinc-500">CEO Feedback</label>
+                      <p className="mt-1 rounded-lg border border-zinc-700 bg-zinc-800/30 p-3 text-sm italic text-zinc-400">
+                        {v.ceo_feedback}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Images */}
+                  {v.image_urls && v.image_urls.length > 0 && (
+                    <div>
+                      <label className="text-xs font-medium uppercase tracking-wider text-zinc-500">Images</label>
+                      <div className="mt-2 flex flex-wrap gap-3">
+                        {v.image_urls.map((url, i) => {
+                          const fullUrl = url.startsWith("http") ? url : `${apiUrl}${url}`;
+                          return (
+                            <div key={i} className="group relative overflow-hidden rounded-lg border border-zinc-700">
+                              <img
+                                src={fullUrl}
+                                alt={`Product image ${i + 1}`}
+                                className="h-24 w-24 object-cover"
+                              />
+                              <a
+                                href={fullUrl}
+                                download
+                                className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 transition-opacity group-hover:opacity-100"
+                              >
+                                <Download className="h-5 w-5 text-white" />
+                              </a>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+
+      {tab === "research" && (
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-6">
+          {Object.keys(product.research_data).length === 0 ? (
+            <p className="text-zinc-400">No research data available yet.</p>
+          ) : (
+            <div className="space-y-4">
+              {Object.entries(product.research_data).map(([key, value]) => (
+                <div key={key}>
+                  <label className="text-xs font-medium uppercase tracking-wider text-zinc-500">
+                    {key.replace(/_/g, " ")}
+                  </label>
+                  <div className="mt-1 rounded-lg bg-zinc-800/50 p-3 text-sm text-zinc-200">
+                    {typeof value === "object" ? (
+                      <pre className="whitespace-pre-wrap">{JSON.stringify(value, null, 2)}</pre>
+                    ) : (
+                      String(value)
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {Object.keys(product.trend_data).length > 0 && (
+            <div className="mt-6 border-t border-zinc-800 pt-6">
+              <h3 className="mb-4 text-sm font-semibold text-zinc-300">Trend Data</h3>
+              {Object.entries(product.trend_data).map(([key, value]) => (
+                <div key={key} className="mb-3">
+                  <label className="text-xs font-medium uppercase tracking-wider text-zinc-500">
+                    {key.replace(/_/g, " ")}
+                  </label>
+                  <div className="mt-1 rounded-lg bg-zinc-800/50 p-3 text-sm text-zinc-200">
+                    {typeof value === "object" ? (
+                      <pre className="whitespace-pre-wrap">{JSON.stringify(value, null, 2)}</pre>
+                    ) : (
+                      String(value)
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {tab === "social" && (
+        <div className="space-y-4">
+          {(!product.social_posts || product.social_posts.length === 0) ? (
+            <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-10 text-center">
+              <p className="text-zinc-400">No social posts generated yet.</p>
+            </div>
+          ) : (
+            product.social_posts.map((post) => (
+              <div key={post.id} className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="rounded bg-fuchsia-500/20 px-2.5 py-1 text-sm font-semibold text-fuchsia-300">
+                      {post.platform}
+                    </span>
+                    <StatusBadge status={post.post_status} />
+                  </div>
+                  {post.caption && <CopyButton text={post.caption} label={`${post.platform} caption`} />}
+                </div>
+                {post.caption && (
+                  <p className="mt-3 whitespace-pre-wrap rounded-lg bg-zinc-800/50 p-3 text-sm text-zinc-200">
+                    {post.caption}
+                  </p>
+                )}
+                {post.posted_at && (
+                  <p className="mt-2 text-xs text-zinc-500">
+                    Posted: {new Date(post.posted_at).toLocaleString()}
+                  </p>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+      )}
+
+      {tab === "logs" && (
+        <div className="space-y-3">
+          {(!product.pipeline_logs || product.pipeline_logs.length === 0) ? (
+            <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-10 text-center">
+              <p className="text-zinc-400">No pipeline logs yet.</p>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-zinc-800 bg-zinc-900/50">
+              {product.pipeline_logs.map((log, i) => (
+                <div
+                  key={log.id}
+                  className={`flex items-start gap-4 p-4 ${
+                    i < product.pipeline_logs!.length - 1 ? "border-b border-zinc-800" : ""
+                  }`}
+                >
+                  <div className="mt-1 flex-shrink-0">
+                    <div
+                      className={`h-2.5 w-2.5 rounded-full ${
+                        log.status === "success"
+                          ? "bg-emerald-400"
+                          : log.status === "running"
+                            ? "bg-blue-400 animate-pulse"
+                            : log.status === "error"
+                              ? "bg-red-400"
+                              : "bg-zinc-500"
+                      }`}
+                    />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-medium text-zinc-200">{log.agent}</span>
+                      {log.ai_provider && (
+                        <span className="rounded bg-zinc-800 px-2 py-0.5 text-xs text-zinc-400">
+                          {log.ai_provider}
+                        </span>
+                      )}
+                      <StatusBadge status={log.status} />
+                    </div>
+                    {log.message && (
+                      <p className="mt-1 text-sm text-zinc-400">{log.message}</p>
+                    )}
+                    <p className="mt-1 text-xs text-zinc-600">
+                      {new Date(log.created_at).toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
