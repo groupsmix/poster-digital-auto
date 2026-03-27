@@ -57,6 +57,23 @@ async def generate_email_campaign(product_id: int) -> dict:
             for v in variant_info
         )
 
+    # Fetch upsell suggestions to embed in follow-up emails
+    upsell_context = ""
+    try:
+        with get_db() as upsell_conn:
+            related = upsell_conn.execute(
+                """SELECT p.id, p.name, p.product_type
+                   FROM products p WHERE p.id != ? AND p.status = 'published'
+                   ORDER BY p.created_at DESC LIMIT 5""",
+                (product_id,),
+            ).fetchall()
+            if related:
+                upsell_context = "\n\nRelated products to suggest in follow-up emails:\n" + "\n".join(
+                    f"- {r['name']} ({r['product_type']})" for r in related
+                )
+    except Exception:
+        pass
+
     prompt = f"""You are an email marketing expert for digital product creators.
 
 Create a complete email campaign for this product:
@@ -65,8 +82,11 @@ Product: {product_name}
 Brief: {brief}
 Variants:
 {variant_context or 'No variants yet'}
+{upsell_context}
 
-Generate a 3-email campaign sequence. Return ONLY valid JSON (no markdown, no code fences):
+Generate a 3-email campaign sequence. For the Day 3 and Day 7 follow-ups, include
+specific upsell/cross-sell product suggestions from the related products above.
+Return ONLY valid JSON (no markdown, no code fences):
 {{
   "subject_lines": [
     "Subject line 1 - curiosity/benefit angle",
@@ -79,11 +99,11 @@ Generate a 3-email campaign sequence. Return ONLY valid JSON (no markdown, no co
   }},
   "day3_followup": {{
     "subject": "Subject for day 3 follow-up",
-    "body": "Tip/value email. Share a useful tip related to the product's niche. Soft mention of the product. Keep under 200 words."
+    "body": "Tip/value email. Share a useful tip related to the product's niche. Soft mention of the product. Include a 'You might also like' section with 1-2 related products. Keep under 200 words."
   }},
   "day7_followup": {{
     "subject": "Subject for day 7 follow-up",
-    "body": "Upsell/reminder email. Mention the product again, add urgency or bonus. Suggest related products. Keep under 200 words."
+    "body": "Upsell/reminder email. Mention the product again, add urgency or bonus. Include specific cross-sell suggestions with short pitches for 1-2 related products. Keep under 200 words."
   }}
 }}"""
 

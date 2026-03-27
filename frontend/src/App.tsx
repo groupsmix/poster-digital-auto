@@ -20,6 +20,7 @@ import CompetitorSpyPage from "@/pages/CompetitorSpyPage";
 import AffiliatePage from "@/pages/AffiliatePage";
 import PiracyPage from "@/pages/PiracyPage";
 import WhiteLabelPage from "@/pages/WhiteLabelPage";
+import ArbitragePage from "@/pages/ArbitragePage";
 
 function App() {
   return (
@@ -46,6 +47,7 @@ function App() {
             <Route path="/affiliates" element={<AffiliatePage />} />
             <Route path="/piracy" element={<PiracyPage />} />
             <Route path="/white-label" element={<WhiteLabelPage />} />
+            <Route path="/arbitrage" element={<ArbitragePage />} />
             <Route path="/settings" element={<SettingsPage />} />
           </Routes>
         </main>

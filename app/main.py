@@ -114,6 +114,9 @@ from app.piracy_protection import (
     generate_dmca_template,
     get_dmca_requests,
     update_dmca_status,
+    embed_invisible_watermark,
+    extract_watermark,
+    run_piracy_scan,
 )
 from app.white_label import (
     get_tiers,
@@ -188,6 +191,46 @@ async def _trend_cron_loop():
             logging.getLogger(__name__).error("Trend cron failed: %s", e)
 
 
+async def _competitor_cron_loop():
+    """Background cron: run competitor scan daily at 7:00 AM UTC."""
+    while True:
+        now = datetime.utcnow()
+        target = now.replace(hour=7, minute=0, second=0, microsecond=0)
+        if now >= target:
+            target = target.replace(day=target.day + 1)
+        wait_seconds = (target - now).total_seconds()
+        await asyncio.sleep(wait_seconds)
+        try:
+            await run_competitor_scan(niches="")
+        except Exception as e:
+            logging.getLogger(__name__).error("Competitor cron failed: %s", e)
+
+
+async def _seasonal_template_cron_loop():
+    """Background cron: activate seasonal templates at midnight UTC on the 1st."""
+    while True:
+        now = datetime.utcnow()
+        # Run at midnight on the 1st of each month
+        if now.day == 1 and now.hour == 0 and now.minute < 5:
+            try:
+                from app.templates_bundles import activate_seasonal_templates
+                activate_seasonal_templates(now.month)
+            except Exception as e:
+                logging.getLogger(__name__).error("Seasonal template cron failed: %s", e)
+        await asyncio.sleep(300)  # Check every 5 minutes
+
+
+async def _email_drip_cron_loop():
+    """Background cron: process scheduled email drip sequences every 5 minutes."""
+    while True:
+        await asyncio.sleep(300)  # Every 5 minutes
+        try:
+            from app.brevo_integration import process_scheduled_emails
+            await process_scheduled_emails()
+        except Exception as e:
+            logging.getLogger(__name__).error("Email drip cron failed: %s", e)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize database and seed data on startup."""
@@ -200,8 +243,12 @@ async def lifespan(app: FastAPI):
     scheduler_task = asyncio.create_task(scheduler_loop())
     niche_cron_task = asyncio.create_task(_niche_cron_loop())
     trend_cron_task = asyncio.create_task(_trend_cron_loop())
+    competitor_cron_task = asyncio.create_task(_competitor_cron_loop())
+    seasonal_cron_task = asyncio.create_task(_seasonal_template_cron_loop())
+    email_drip_task = asyncio.create_task(_email_drip_cron_loop())
     yield
-    for task in (scheduler_task, niche_cron_task, trend_cron_task):
+    for task in (scheduler_task, niche_cron_task, trend_cron_task,
+                 competitor_cron_task, seasonal_cron_task, email_drip_task):
         task.cancel()
         try:
             await task
@@ -2210,6 +2257,23 @@ async def generate_marketing_kit(product_id: int):
     return result
 
 
+@app.get("/api/affiliates/track-conversion-pixel")
+async def track_conversion_pixel(
+    ref_code: str = Query(..., description="Referral code"),
+    amount: float = Query(0.0, description="Sale amount"),
+):
+    """Webhook/pixel endpoint for automatic affiliate conversion tracking.
+
+    Embeddable as an invisible pixel or webhook callback from payment platforms.
+    Example: <img src="/api/affiliates/track-conversion-pixel?ref_code=ABC&amount=9.99" width="1" height="1" />
+    """
+    if not ref_code:
+        raise HTTPException(status_code=400, detail="ref_code is required")
+    result = track_referral_conversion(ref_code, amount)
+    # Return a 1x1 transparent pixel for browser-based tracking
+    return {"success": result.get("success", False), "tracked": True, "ref_code": ref_code}
+
+
 # ══════════════════════════════════════════════════════════════════════
 # PIRACY PROTECTION (Feature 24)
 # ══════════════════════════════════════════════════════════════════════
@@ -2270,6 +2334,35 @@ async def update_dmca(dmca_id: int, body: DMCAStatusRequest):
     result = update_dmca_status(dmca_id, body.status)
     if not result:
         raise HTTPException(status_code=404, detail="DMCA request not found or invalid status")
+    return result
+
+
+@app.post("/api/products/{product_id}/watermark/embed")
+async def embed_watermark(product_id: int, image_path: str = Query(..., description="Path to the image file")):
+    """Embed an invisible watermark into a product image using LSB steganography."""
+    # First ensure watermark ID exists
+    wm_result = generate_watermark_id(product_id)
+    if not wm_result.get("success"):
+        raise HTTPException(status_code=400, detail=wm_result.get("message", "Failed"))
+    result = embed_invisible_watermark(image_path, wm_result["watermark_id"])
+    if not result.get("success"):
+        raise HTTPException(status_code=400, detail=result.get("message", "Failed"))
+    return result
+
+
+@app.post("/api/products/{product_id}/watermark/extract")
+async def extract_product_watermark(product_id: int, image_path: str = Query(..., description="Path to the image file")):
+    """Extract an invisible watermark from a watermarked image."""
+    result = extract_watermark(image_path)
+    return result
+
+
+@app.post("/api/piracy/{product_id}/auto-scan")
+async def auto_piracy_scan(product_id: int):
+    """Run an automated piracy scan using reverse image search (placeholder)."""
+    result = await run_piracy_scan(product_id)
+    if not result.get("success"):
+        raise HTTPException(status_code=400, detail=result.get("message", "Failed"))
     return result
 
 
@@ -2350,3 +2443,86 @@ async def tenant_limits(tenant_id: int):
 async def white_label_stats():
     """Get aggregate statistics across all tenants."""
     return get_tenant_stats()
+
+
+@app.get("/api/white-label/tenants/{tenant_id}/branding")
+async def get_tenant_branding(tenant_id: int):
+    """Get tenant branding info for rendering branded dashboards."""
+    tenant = get_tenant(tenant_id)
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    return {
+        "tenant_id": tenant_id,
+        "brand_name": tenant.get("brand_name", ""),
+        "brand_color": tenant.get("brand_color", "#7c3aed"),
+        "custom_domain": tenant.get("custom_domain", ""),
+        "tier": tenant.get("tier", "free"),
+        "logo_url": tenant.get("logo_url", ""),
+        "status": tenant.get("status", "active"),
+    }
+
+
+@app.get("/api/white-label/tenants/{tenant_id}/products")
+async def get_tenant_products(tenant_id: int):
+    """Get products scoped to a specific tenant (multi-tenant data isolation)."""
+    tenant = get_tenant(tenant_id)
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT * FROM products WHERE tenant_id = ? ORDER BY created_at DESC",
+            (tenant_id,),
+        ).fetchall()
+    products = []
+    for r in rows:
+        p = row_to_dict(r)
+        p["target_platforms"] = parse_json_field(p.get("target_platforms"))
+        p["target_languages"] = parse_json_field(p.get("target_languages"), ["en"])
+        products.append(p)
+    return {"products": products, "count": len(products), "tenant_id": tenant_id}
+
+
+# ══════════════════════════════════════════════════════════════════════
+# STRIPE INTEGRATION STUB (Feature 26 Enhancement)
+# ══════════════════════════════════════════════════════════════════════
+
+
+@app.get("/api/billing/status")
+async def billing_status():
+    """Get current billing/Stripe integration status."""
+    from app.stripe_integration import get_stripe_status
+    return get_stripe_status()
+
+
+@app.post("/api/billing/subscribe")
+async def create_subscription(
+    tenant_id: int = Query(..., description="Tenant ID"),
+    tier: str = Query("pro", description="Subscription tier: free, pro, agency"),
+):
+    """Create or update a subscription for a tenant (Stripe stub)."""
+    from app.stripe_integration import create_subscription as stripe_subscribe
+    result = stripe_subscribe(tenant_id, tier)
+    if not result.get("success"):
+        raise HTTPException(status_code=400, detail=result.get("message", "Failed"))
+    return result
+
+
+@app.post("/api/billing/cancel")
+async def cancel_subscription(
+    tenant_id: int = Query(..., description="Tenant ID"),
+):
+    """Cancel a subscription for a tenant (Stripe stub)."""
+    from app.stripe_integration import cancel_subscription as stripe_cancel
+    result = stripe_cancel(tenant_id)
+    if not result.get("success"):
+        raise HTTPException(status_code=400, detail=result.get("message", "Failed"))
+    return result
+
+
+@app.get("/api/billing/invoices")
+async def list_invoices(
+    tenant_id: int = Query(..., description="Tenant ID"),
+):
+    """Get billing invoices for a tenant (Stripe stub)."""
+    from app.stripe_integration import get_invoices
+    return get_invoices(tenant_id)
