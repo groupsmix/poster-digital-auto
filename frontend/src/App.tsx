@@ -13,6 +13,7 @@ import NicheFinderPage from "@/pages/NicheFinderPage";
 import TrendsPage from "@/pages/TrendsPage";
 import ABTestsPage from "@/pages/ABTestsPage";
 import RevenueGoalsPage from "@/pages/RevenueGoalsPage";
+import FAQManagerPage from "@/pages/FAQManagerPage";
 
 function App() {
   return (
@@ -33,6 +34,7 @@ function App() {
             <Route path="/trends" element={<TrendsPage />} />
             <Route path="/ab-tests" element={<ABTestsPage />} />
             <Route path="/goals" element={<RevenueGoalsPage />} />
+            <Route path="/faq" element={<FAQManagerPage />} />
           </Routes>
         </main>
         <Toaster

@@ -1,14 +1,14 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
-import { ArrowLeft, Copy, Download, Check, ClipboardList, Send, Edit3, Shuffle, X, Globe, FlaskConical, DollarSign, Mail, Loader2, Tag, Clock, Package, Zap } from "lucide-react";
-import { fetchProduct, generateCaptions, triggerAutoPost, updateSocialPost, fetchAutoPostConfig, remixProduct, fetchRemixChildren, createABTest, fetchPriceSuggestions, generateEmailCampaign, fetchEmailCampaign } from "@/lib/api";
-import type { Product, AutoPostConfig, PriceSuggestions, EmailCampaign } from "@/lib/types";
+import { ArrowLeft, Copy, Download, Check, ClipboardList, Send, Edit3, Shuffle, X, Globe, FlaskConical, DollarSign, Mail, Loader2, Tag, Clock, Package, Zap, RefreshCw, Play, Pause, Volume2, FileText } from "lucide-react";
+import { fetchProduct, generateCaptions, triggerAutoPost, updateSocialPost, fetchAutoPostConfig, remixProduct, fetchRemixChildren, createABTest, fetchPriceSuggestions, generateEmailCampaign, fetchEmailCampaign, repurposeProduct, fetchRepurposedContent, generateVoiceover } from "@/lib/api";
+import type { Product, AutoPostConfig, PriceSuggestions, EmailCampaign, RepurposedContent, VoiceOverResult } from "@/lib/types";
 import StatusBadge from "@/components/StatusBadge";
 import CeoScoreBadge from "@/components/CeoScoreBadge";
 import Spinner from "@/components/Spinner";
 import { toast } from "sonner";
 
-type Tab = "copy" | "research" | "social" | "email" | "pricing" | "logs";
+type Tab = "copy" | "research" | "social" | "email" | "pricing" | "repurpose" | "voiceover" | "logs";
 
 const REMIX_TYPE_OPTIONS = [
   { key: "audience", label: "Audience", description: "Student, Business, Family, Freelancer" },
@@ -646,6 +646,245 @@ function PricingTab({ product }: { product: Product }) {
   );
 }
 
+const CONTENT_TYPE_LABELS: Record<string, { label: string; icon: string }> = {
+  blog_post: { label: "Blog Post (SEO)", icon: "📝" },
+  youtube_script: { label: "YouTube Script (60s)", icon: "🎬" },
+  twitter_thread: { label: "Twitter/X Thread", icon: "🐦" },
+  instagram_carousel: { label: "Instagram Carousel", icon: "📸" },
+  newsletter: { label: "Newsletter Issue", icon: "📧" },
+  quora_answer: { label: "Quora Answer", icon: "❓" },
+  pinterest_pin: { label: "Pinterest Pin", icon: "📌" },
+};
+
+function RepurposeTab({ product }: { product: Product }) {
+  const [content, setContent] = useState<RepurposedContent[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [fetching, setFetching] = useState(true);
+
+  useEffect(() => {
+    fetchRepurposedContent(product.id)
+      .then((res) => setContent(res.content))
+      .catch(() => {})
+      .finally(() => setFetching(false));
+  }, [product.id]);
+
+  async function handleRepurpose() {
+    setLoading(true);
+    try {
+      const res = await repurposeProduct(product.id);
+      setContent(res.content);
+      toast.success(res.message);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Repurposing failed");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (fetching) {
+    return (
+      <div className="flex justify-center py-10">
+        <Spinner className="h-6 w-6" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center gap-3">
+        <button
+          onClick={handleRepurpose}
+          disabled={loading}
+          className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-500 disabled:opacity-50"
+        >
+          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+          {loading ? "Generating..." : content.length > 0 ? "Regenerate All" : "Repurpose Content"}
+        </button>
+        {content.length > 0 && (
+          <span className="text-sm text-zinc-400">{content.length} formats generated</span>
+        )}
+      </div>
+
+      {content.length === 0 ? (
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-10 text-center">
+          <FileText className="mx-auto h-10 w-10 text-zinc-600" />
+          <p className="mt-3 text-zinc-400">
+            No repurposed content yet. Click &ldquo;Repurpose Content&rdquo; to generate 7 content formats from this product.
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {content.map((item) => {
+            const meta = CONTENT_TYPE_LABELS[item.content_type] || { label: item.content_type, icon: "📄" };
+            return (
+              <div key={item.id} className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-5">
+                <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">{meta.icon}</span>
+                    <h3 className="text-sm font-semibold text-zinc-200">{meta.label}</h3>
+                    {item.platform && (
+                      <span className="rounded bg-fuchsia-500/20 px-2 py-0.5 text-xs text-fuchsia-300">
+                        {item.platform}
+                      </span>
+                    )}
+                  </div>
+                  <CopyButton text={item.content} label={meta.label} />
+                </div>
+                <p className="mt-3 whitespace-pre-wrap rounded-lg bg-zinc-800/50 p-4 text-sm leading-relaxed text-zinc-200">
+                  {item.content}
+                </p>
+                <p className="mt-2 text-xs text-zinc-600">
+                  Generated: {new Date(item.created_at).toLocaleString()}
+                </p>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function VoiceOverTab({ product }: { product: Product }) {
+  const [result, setResult] = useState<VoiceOverResult | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [playing, setPlaying] = useState(false);
+  const [audioEl, setAudioEl] = useState<HTMLAudioElement | null>(null);
+
+  async function handleGenerate() {
+    setLoading(true);
+    try {
+      const res = await generateVoiceover(product.id);
+      setResult(res);
+      toast.success(res.message);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Voice-over generation failed");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function handlePlay() {
+    if (!result?.audio_url) {
+      toast.error("No audio available. Browser TTS will be used.");
+      if (result?.script) {
+        const utterance = new SpeechSynthesisUtterance(result.script);
+        utterance.rate = 0.9;
+        utterance.onend = () => setPlaying(false);
+        speechSynthesis.speak(utterance);
+        setPlaying(true);
+      }
+      return;
+    }
+
+    if (playing && audioEl) {
+      audioEl.pause();
+      setPlaying(false);
+      return;
+    }
+
+    const audio = new Audio(result.audio_url);
+    audio.onended = () => setPlaying(false);
+    audio.play();
+    setAudioEl(audio);
+    setPlaying(true);
+  }
+
+  function handleStop() {
+    if (audioEl) {
+      audioEl.pause();
+      audioEl.currentTime = 0;
+    }
+    speechSynthesis.cancel();
+    setPlaying(false);
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center gap-3">
+        <button
+          onClick={handleGenerate}
+          disabled={loading}
+          className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-500 disabled:opacity-50"
+        >
+          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Volume2 className="h-4 w-4" />}
+          {loading ? "Generating..." : result ? "Regenerate Voice-Over" : "Generate Voice-Over"}
+        </button>
+      </div>
+
+      {!result ? (
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-10 text-center">
+          <Volume2 className="mx-auto h-10 w-10 text-zinc-600" />
+          <p className="mt-3 text-zinc-400">
+            No voice-over generated yet. Click &ldquo;Generate Voice-Over&rdquo; to create a 30-second audio script.
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {/* Script */}
+          <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-5">
+            <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+              <h3 className="text-sm font-semibold text-zinc-200">Voice-Over Script</h3>
+              <CopyButton text={result.script} label="Script" />
+            </div>
+            <p className="mt-3 whitespace-pre-wrap rounded-lg bg-zinc-800/50 p-4 text-sm leading-relaxed text-zinc-200">
+              {result.script}
+            </p>
+            <div className="mt-3 flex flex-wrap items-center gap-4 text-xs text-zinc-500">
+              <span>{result.word_count} words</span>
+              <span>{result.duration_estimate}</span>
+              <span>Tone: {result.tone}</span>
+              <span>TTS: {result.tts_provider}</span>
+              {result.ai_provider && <span>AI: {result.ai_provider}</span>}
+            </div>
+          </div>
+
+          {/* Audio Player */}
+          <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-5">
+            <h3 className="mb-4 text-sm font-semibold text-zinc-200">Audio Player</h3>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handlePlay}
+                className={`inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium text-white transition-colors ${
+                  playing
+                    ? "bg-amber-600 hover:bg-amber-500"
+                    : "bg-emerald-600 hover:bg-emerald-500"
+                }`}
+              >
+                {playing ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                {playing ? "Pause" : "Play"}
+              </button>
+              {playing && (
+                <button
+                  onClick={handleStop}
+                  className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-800 px-4 py-2.5 text-sm font-medium text-zinc-300 hover:bg-zinc-700"
+                >
+                  Stop
+                </button>
+              )}
+              {result.audio_url && (
+                <a
+                  href={result.audio_url}
+                  download
+                  className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-800 px-4 py-2.5 text-sm font-medium text-zinc-300 hover:bg-zinc-700"
+                >
+                  <Download className="h-4 w-4" />
+                  Download
+                </a>
+              )}
+            </div>
+            {!result.audio_url && (
+              <p className="mt-3 text-xs text-zinc-500">
+                No audio file generated — browser Text-to-Speech will be used for playback.
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ProductDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -712,6 +951,8 @@ export default function ProductDetailPage() {
     { key: "social", label: "Social Posts" },
     { key: "email", label: "Email" },
     { key: "pricing", label: "Pricing" },
+    { key: "repurpose", label: "Repurpose" },
+    { key: "voiceover", label: "Voice-Over" },
     { key: "logs", label: "Pipeline Logs" },
   ];
 
@@ -1073,6 +1314,14 @@ export default function ProductDetailPage() {
 
       {tab === "pricing" && (
         <PricingTab product={product} />
+      )}
+
+      {tab === "repurpose" && (
+        <RepurposeTab product={product} />
+      )}
+
+      {tab === "voiceover" && (
+        <VoiceOverTab product={product} />
       )}
 
       {tab === "logs" && (

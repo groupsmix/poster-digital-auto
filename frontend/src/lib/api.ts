@@ -9,6 +9,8 @@ import type {
   PriceSuggestions, LaunchPricing, BundlePricing,
   EmailCampaign, EmailCampaignResult,
   RevenueGoal,
+  RepurposedContent, RepurposeResult, VoiceOverResult,
+  FAQEntry, FAQSuggestion,
 } from "./types";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
@@ -334,4 +336,52 @@ export async function fetchGoals(): Promise<{ goals: RevenueGoal[]; active_goal:
 
 export async function refreshGoals(): Promise<{ updated: RevenueGoal[]; count: number }> {
   return request("/api/goals/refresh", { method: "POST" });
+}
+
+// Content Repurposing
+export async function repurposeProduct(productId: number): Promise<RepurposeResult> {
+  return request<RepurposeResult>(`/api/products/${productId}/repurpose`, { method: "POST" });
+}
+
+export async function fetchRepurposedContent(productId: number): Promise<{ content: RepurposedContent[]; count: number }> {
+  return request(`/api/products/${productId}/repurpose`);
+}
+
+// Voice-Over
+export async function generateVoiceover(productId: number): Promise<VoiceOverResult> {
+  return request<VoiceOverResult>(`/api/products/${productId}/voiceover`, { method: "POST" });
+}
+
+// FAQ Bot
+export async function createFAQ(question: string, answer: string, category: string = "general"): Promise<{ success: boolean; faq: FAQEntry; message: string }> {
+  return request("/api/faq", {
+    method: "POST",
+    body: JSON.stringify({ question, answer, category }),
+  });
+}
+
+export async function fetchFAQs(category?: string, search?: string): Promise<{ faqs: FAQEntry[]; count: number }> {
+  const params = new URLSearchParams();
+  if (category) params.set("category", category);
+  if (search) params.set("search", search);
+  const query = params.toString() ? `?${params}` : "";
+  return request(`/api/faq${query}`);
+}
+
+export async function updateFAQEntry(id: number, data: { question?: string; answer?: string; category?: string }): Promise<FAQEntry> {
+  return request<FAQEntry>(`/api/faq/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteFAQEntry(id: number): Promise<{ message: string }> {
+  return request(`/api/faq/${id}`, { method: "DELETE" });
+}
+
+export async function suggestFAQAnswer(question: string): Promise<FAQSuggestion> {
+  return request<FAQSuggestion>("/api/faq/suggest", {
+    method: "POST",
+    body: JSON.stringify({ question }),
+  });
 }

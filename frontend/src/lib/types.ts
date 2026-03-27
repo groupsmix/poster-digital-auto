@@ -390,3 +390,61 @@ export interface TrendPrediction {
   created_product_id: number | null;
   created_at: string;
 }
+
+// Content Repurposing types
+export interface RepurposedContent {
+  id: number;
+  product_id: number;
+  content_type: string;
+  content: string;
+  platform: string;
+  post_status: string;
+  scheduled_at: string | null;
+  created_at: string;
+  label: string;
+}
+
+export interface RepurposeResult {
+  success: boolean;
+  product_id: number;
+  content: RepurposedContent[];
+  count: number;
+  provider: string | null;
+  message: string;
+}
+
+// Voice-Over types
+export interface VoiceOverResult {
+  success: boolean;
+  product_id: number;
+  script: string;
+  duration_estimate: string;
+  word_count: number;
+  tone: string;
+  audio_url: string;
+  tts_provider: string;
+  ai_provider: string | null;
+  message: string;
+}
+
+// FAQ Bot types
+export interface FAQEntry {
+  id: number;
+  question: string;
+  answer: string;
+  category: string;
+  times_used: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FAQSuggestion {
+  success: boolean;
+  question: string;
+  suggested_answer: string;
+  confidence: number;
+  category: string;
+  related_faqs: string[];
+  provider: string | null;
+  message: string;
+}
