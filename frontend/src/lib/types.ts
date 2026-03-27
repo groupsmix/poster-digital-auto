@@ -180,3 +180,28 @@ export interface Insight {
   message: string;
   severity: "positive" | "negative" | "warning" | "info";
 }
+
+export interface CalendarPost {
+  id: number;
+  product_id: number;
+  platform: string;
+  caption: string;
+  video_url: string;
+  voice_url: string;
+  post_status: string;
+  post_url: string;
+  scheduled_at: string;
+  posted_at: string | null;
+  created_at: string;
+  product_name: string;
+  hashtags?: string[];
+}
+
+export interface ScheduleSuggestion {
+  platform: string;
+  best_days: string[];
+  best_hours: number[];
+  timezone: string;
+  tip: string;
+  color: string;
+}

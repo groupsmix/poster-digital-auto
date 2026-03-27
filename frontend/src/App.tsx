@@ -8,6 +8,7 @@ import ProductDetailPage from "@/pages/ProductDetailPage";
 import AIStatusPage from "@/pages/AIStatusPage";
 import SocialPostsPage from "@/pages/SocialPostsPage";
 import AnalyticsPage from "@/pages/AnalyticsPage";
+import CalendarPage from "@/pages/CalendarPage";
 
 function App() {
   return (
@@ -23,6 +24,7 @@ function App() {
             <Route path="/ai-status" element={<AIStatusPage />} />
             <Route path="/social-posts" element={<SocialPostsPage />} />
             <Route path="/analytics" element={<AnalyticsPage />} />
+            <Route path="/calendar" element={<CalendarPage />} />
           </Routes>
         </main>
         <Toaster
