@@ -190,12 +190,20 @@ def init_db():
         CREATE TABLE IF NOT EXISTS platform_settings (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             platform TEXT NOT NULL UNIQUE,
+            type TEXT DEFAULT 'selling',
             tone TEXT DEFAULT '',
             plan_mode TEXT DEFAULT 'A',
             enabled INTEGER DEFAULT 1,
             max_title_length INTEGER,
             max_description_length INTEGER,
             custom_instructions TEXT DEFAULT ''
+        );
+
+        CREATE TABLE IF NOT EXISTS settings_preferences (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            key TEXT NOT NULL UNIQUE,
+            value TEXT DEFAULT '{}',
+            updated_at TEXT DEFAULT (datetime('now'))
         );
 
         CREATE TABLE IF NOT EXISTS ai_status (
@@ -247,26 +255,60 @@ def seed_platform_settings():
 
     platforms = [
         # Selling platforms
-        ("Gumroad", "casual", "A", 1, 80, 5000, "Creator-friendly, direct tone. Use casual language."),
-        ("Payhip", "professional", "A", 1, 100, 5000, "Clean, professional, value-focused descriptions."),
-        ("Lemon Squeezy", "modern", "A", 1, 100, 5000, "Modern, tech-savvy, concise copy."),
+        ("Gumroad", "selling", "casual", "A", 1, 80, 5000, "Creator-friendly, direct tone. Use casual language."),
+        ("Payhip", "selling", "professional", "A", 1, 100, 5000, "Clean, professional, value-focused descriptions."),
+        ("Lemon Squeezy", "selling", "modern", "A", 1, 100, 5000, "Modern, tech-savvy, concise copy."),
         # Social platforms
-        ("Reddit", "helpful", "A", 1, 300, 10000, "Community-focused, NO hard selling. Be helpful and genuine."),
-        ("Tumblr", "creative", "B", 1, 200, 5000, "Visual, creative, hashtag-heavy, aesthetic vibes."),
-        ("Twitter", "punchy", "A", 1, 280, 280, "Short, punchy, max 280 chars. Hook in first line."),
-        ("Pinterest", "seo", "B", 1, 100, 500, "SEO-heavy description, keyword-rich for discovery."),
-        ("Telegram", "direct", "B", 1, 200, 4096, "Direct, informative, include links and CTAs."),
-        ("Instagram", "engaging", "A", 1, 200, 2200, "Engaging caption + hashtags + CTA. Visual-first."),
-        ("TikTok", "trendy", "A", 1, 150, 2200, "Trendy, casual, hook in first line. Use trending sounds."),
-        ("Facebook", "conversational", "A", 1, 200, 5000, "Conversational, value-focused, community-building."),
-        ("Quora", "educational", "A", 1, 200, 5000, "Answer-style, educational, helpful. Establish authority."),
+        ("Reddit", "social", "helpful", "A", 1, 300, 10000, "Community-focused, NO hard selling. Be helpful and genuine."),
+        ("Tumblr", "social", "creative", "B", 1, 200, 5000, "Visual, creative, hashtag-heavy, aesthetic vibes."),
+        ("Twitter", "social", "punchy", "A", 1, 280, 280, "Short, punchy, max 280 chars. Hook in first line."),
+        ("Pinterest", "social", "seo", "B", 1, 100, 500, "SEO-heavy description, keyword-rich for discovery."),
+        ("Telegram", "social", "direct", "B", 1, 200, 4096, "Direct, informative, include links and CTAs."),
+        ("Instagram", "social", "engaging", "A", 1, 200, 2200, "Engaging caption + hashtags + CTA. Visual-first."),
+        ("TikTok", "social", "trendy", "A", 1, 150, 2200, "Trendy, casual, hook in first line. Use trending sounds."),
+        ("Facebook", "social", "conversational", "A", 1, 200, 5000, "Conversational, value-focused, community-building."),
+        ("Quora", "social", "educational", "A", 1, 200, 5000, "Answer-style, educational, helpful. Establish authority."),
     ]
 
     cursor.executemany(
         """INSERT INTO platform_settings
-           (platform, tone, plan_mode, enabled, max_title_length, max_description_length, custom_instructions)
-           VALUES (?, ?, ?, ?, ?, ?, ?)""",
+           (platform, type, tone, plan_mode, enabled, max_title_length, max_description_length, custom_instructions)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
         platforms,
+    )
+
+    conn.commit()
+    conn.close()
+
+
+def seed_preferences():
+    """Insert default preferences if table is empty."""
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT COUNT(*) FROM settings_preferences")
+    count = cursor.fetchone()[0]
+    if count > 0:
+        conn.close()
+        return
+
+    import json
+    defaults = [
+        ("default_platforms", json.dumps(["Gumroad", "Payhip"])),
+        ("default_languages", json.dumps(["en"])),
+        ("default_plan_mode", json.dumps("A")),
+        ("default_price_range", json.dumps({"min": 5, "max": 15})),
+        ("notification_niche_finder", json.dumps(True)),
+        ("notification_trend_alerts", json.dumps(True)),
+        ("notification_ceo_rejections", json.dumps(True)),
+        ("notification_revenue_milestones", json.dumps(True)),
+        ("notification_method", json.dumps("dashboard")),
+    ]
+
+    cursor.executemany(
+        """INSERT INTO settings_preferences (key, value)
+           VALUES (?, ?)""",
+        defaults,
     )
 
     conn.commit()
