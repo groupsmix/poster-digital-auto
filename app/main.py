@@ -4,10 +4,12 @@ FastAPI backend with SQLite database, full CRUD for products,
 AI failover system, and platform settings management.
 """
 
+import asyncio
 import json
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
+from typing import Optional
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Query
@@ -22,6 +24,17 @@ from app.ai_failover import (
     get_all_provider_statuses,
     load_provider_statuses_from_db,
     reset_all_daily_limits,
+)
+from app.calendar_scheduler import (
+    auto_schedule_posts,
+    batch_schedule_products,
+    get_ai_schedule_suggestions,
+    get_calendar_posts,
+    get_platform_colors,
+    reschedule_post,
+    schedule_post,
+    scheduler_loop,
+    unschedule_post,
 )
 from app.database import get_db, init_db, seed_ai_status, seed_platform_settings
 
@@ -41,7 +54,14 @@ async def lifespan(app: FastAPI):
     seed_platform_settings()
     seed_ai_status()
     load_provider_statuses_from_db()
+    # Start background scheduler for publishing scheduled posts
+    scheduler_task = asyncio.create_task(scheduler_loop())
     yield
+    scheduler_task.cancel()
+    try:
+        await scheduler_task
+    except asyncio.CancelledError:
+        pass
 
 
 app = FastAPI(title="AI Product Factory", version="1.0.0", lifespan=lifespan)
@@ -92,6 +112,29 @@ class VariantUpdate(BaseModel):
 class SocialPostUpdate(BaseModel):
     caption: str | None = None
     post_status: str | None = None
+
+
+class SchedulePostRequest(BaseModel):
+    post_id: int
+    scheduled_at: str
+
+
+class RescheduleRequest(BaseModel):
+    scheduled_at: str
+
+
+class AutoScheduleRequest(BaseModel):
+    post_ids: list[int] | None = None
+    start_date: str | None = None
+    days_span: int = 30
+    posts_per_day: int = 1
+
+
+class BatchScheduleRequest(BaseModel):
+    product_ids: list[int]
+    start_date: str | None = None
+    days_span: int = 30
+    posts_per_day: int = 1
 
 
 # ── Helper Functions ──────────────────────────────────────────────────
@@ -667,3 +710,87 @@ async def update_platform_setting(platform_id: int, body: dict):
         ).fetchone()
 
     return row_to_dict(row)
+
+
+# ══════════════════════════════════════════════════════════════════════
+# CONTENT CALENDAR & SCHEDULER
+# ══════════════════════════════════════════════════════════════════════
+
+@app.get("/api/calendar")
+async def get_calendar(
+    start: str = Query(..., description="Start date (YYYY-MM-DD)"),
+    end: str = Query(..., description="End date (YYYY-MM-DD)"),
+):
+    """Get scheduled posts within a date range."""
+    posts = get_calendar_posts(start, end)
+    return {"posts": posts, "count": len(posts)}
+
+
+@app.post("/api/calendar/schedule")
+async def schedule_calendar_post(body: SchedulePostRequest):
+    """Schedule a social post for a specific date/time."""
+    result = schedule_post(body.post_id, body.scheduled_at)
+    if "error" in result:
+        raise HTTPException(status_code=404, detail=result["error"])
+    return result
+
+
+@app.patch("/api/calendar/{post_id}")
+async def reschedule_calendar_post(post_id: int, body: RescheduleRequest):
+    """Reschedule a post to a new date/time."""
+    result = reschedule_post(post_id, body.scheduled_at)
+    if "error" in result:
+        raise HTTPException(status_code=404, detail=result["error"])
+    return result
+
+
+@app.delete("/api/calendar/{post_id}")
+async def unschedule_calendar_post(post_id: int):
+    """Remove a post from the schedule."""
+    result = unschedule_post(post_id)
+    if "error" in result:
+        raise HTTPException(status_code=404, detail=result["error"])
+    return result
+
+
+@app.get("/api/calendar/suggestions")
+async def get_schedule_suggestions(
+    platform: str | None = Query(None, description="Filter by platform"),
+):
+    """Get AI-powered optimal posting time suggestions."""
+    suggestions = get_ai_schedule_suggestions(platform)
+    return {"suggestions": suggestions, "count": len(suggestions)}
+
+
+@app.post("/api/calendar/auto-schedule")
+async def auto_schedule(body: AutoScheduleRequest):
+    """AI auto-schedules posts optimally across a date range."""
+    scheduled = auto_schedule_posts(
+        post_ids=body.post_ids,
+        start_date=body.start_date,
+        days_span=body.days_span,
+        posts_per_day=body.posts_per_day,
+    )
+    return {
+        "scheduled": scheduled,
+        "count": len(scheduled),
+        "message": f"Auto-scheduled {len(scheduled)} posts",
+    }
+
+
+@app.post("/api/calendar/batch-schedule")
+async def batch_schedule(body: BatchScheduleRequest):
+    """Schedule posts for multiple products across days."""
+    result = batch_schedule_products(
+        product_ids=body.product_ids,
+        start_date=body.start_date,
+        days_span=body.days_span,
+        posts_per_day=body.posts_per_day,
+    )
+    return result
+
+
+@app.get("/api/calendar/platform-colors")
+async def platform_colors():
+    """Get platform color mapping for calendar UI."""
+    return get_platform_colors()

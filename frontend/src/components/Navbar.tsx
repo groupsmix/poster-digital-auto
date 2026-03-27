@@ -1,11 +1,12 @@
 import { Link, useLocation } from "react-router-dom";
-import { LayoutDashboard, PlusCircle, Package, Cpu, Share2 } from "lucide-react";
+import { LayoutDashboard, PlusCircle, Package, Cpu, Share2, Calendar } from "lucide-react";
 
 const links = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
   { to: "/new", label: "New Product", icon: PlusCircle },
   { to: "/products", label: "Products", icon: Package },
   { to: "/social-posts", label: "Social Posts", icon: Share2 },
+  { to: "/calendar", label: "Calendar", icon: Calendar },
   { to: "/ai-status", label: "AI Status", icon: Cpu },
 ];
 
