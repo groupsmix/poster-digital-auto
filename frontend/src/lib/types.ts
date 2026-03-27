@@ -449,6 +449,150 @@ export interface FAQSuggestion {
   message: string;
 }
 
+// Product Templates & Bundles types
+export interface ProductTemplate {
+  id: number;
+  name: string;
+  product_type: string;
+  tone: string;
+  keywords: string[];
+  price_min: number;
+  price_max: number;
+  platforms: string[];
+  languages: string[];
+  brief_template: string;
+  seasonal_tag: string;
+  auto_activate_month: number | null;
+  times_used: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProductBundle {
+  id: number;
+  name: string;
+  discount_percent: number;
+  individual_total: number;
+  bundle_price: number;
+  seasonal_tag: string;
+  auto_activate_month: number | null;
+  listing_data: Record<string, unknown>;
+  status: string;
+  items: BundleItem[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BundleItem {
+  id: number;
+  bundle_id: number;
+  product_id: number;
+  position: number;
+  individual_price: number;
+  product_name?: string;
+}
+
+// Competitor Spy types
+export interface Competitor {
+  id: number;
+  seller_name: string;
+  platform: string;
+  top_products: string[];
+  price_range: string;
+  strengths: string;
+  weaknesses: string;
+  threat_level: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CompetitorAlert {
+  id: number;
+  alert_type: string;
+  product_type: string;
+  details: Record<string, unknown>;
+  platform: string;
+  recommendation: string;
+  status: string;
+  created_at: string;
+}
+
+// Affiliate & Referral types
+export interface Affiliate {
+  id: number;
+  name: string;
+  email: string;
+  affiliate_code: string;
+  commission_rate: number;
+  total_earned: number;
+  notes: string;
+  status: string;
+  created_at: string;
+}
+
+export interface ReferralLink {
+  id: number;
+  affiliate_id: number;
+  product_id: number;
+  ref_code: string;
+  clicks: number;
+  conversions: number;
+  created_at: string;
+  affiliate_name?: string;
+  product_name?: string;
+}
+
+// Piracy Protection types
+export interface PiracyProtection {
+  id: number;
+  product_id: number;
+  watermark_id: string;
+  fingerprint: string;
+  status: string;
+  scan_count: number;
+  scan_results: Record<string, unknown>[];
+  last_scan: string | null;
+  created_at: string;
+  updated_at: string;
+  product_name?: string;
+}
+
+export interface DMCARequest {
+  id: number;
+  product_id: number;
+  infringer_url: string;
+  infringer_name: string;
+  dmca_data: Record<string, unknown>;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  product_name?: string;
+}
+
+// White-Label types
+export interface WhiteLabelTenant {
+  id: number;
+  name: string;
+  slug: string;
+  owner_email: string;
+  brand_name: string;
+  brand_color: string;
+  tier: string;
+  api_key: string;
+  custom_domain: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WhiteLabelTier {
+  name: string;
+  price: number;
+  max_products: number;
+  max_platforms: number;
+  features: string[];
+}
+
 // Settings types
 export interface PlatformSetting {
   id: number;

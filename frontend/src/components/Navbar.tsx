@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { LayoutDashboard, PlusCircle, Package, Cpu, Share2, BarChart3, Calendar, Sparkles, TrendingUp, FlaskConical, Target, MessageCircle, Settings } from "lucide-react";
+import { LayoutDashboard, PlusCircle, Package, Cpu, Share2, BarChart3, Calendar, Sparkles, TrendingUp, FlaskConical, Target, MessageCircle, Settings, FileText, Eye, Users, Shield, Building2 } from "lucide-react";
 
 const links = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -14,6 +14,11 @@ const links = [
   { to: "/calendar", label: "Calendar", icon: Calendar },
   { to: "/ai-status", label: "AI Status", icon: Cpu },
   { to: "/faq", label: "FAQ Bot", icon: MessageCircle },
+  { to: "/templates", label: "Templates", icon: FileText },
+  { to: "/competitors", label: "Competitors", icon: Eye },
+  { to: "/affiliates", label: "Affiliates", icon: Users },
+  { to: "/piracy", label: "Piracy", icon: Shield },
+  { to: "/white-label", label: "White-Label", icon: Building2 },
   { to: "/settings", label: "Settings", icon: Settings },
 ];
 

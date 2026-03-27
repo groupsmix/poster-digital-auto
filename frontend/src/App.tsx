@@ -15,6 +15,11 @@ import ABTestsPage from "@/pages/ABTestsPage";
 import RevenueGoalsPage from "@/pages/RevenueGoalsPage";
 import FAQManagerPage from "@/pages/FAQManagerPage";
 import SettingsPage from "@/pages/SettingsPage";
+import TemplatesPage from "@/pages/TemplatesPage";
+import CompetitorSpyPage from "@/pages/CompetitorSpyPage";
+import AffiliatePage from "@/pages/AffiliatePage";
+import PiracyPage from "@/pages/PiracyPage";
+import WhiteLabelPage from "@/pages/WhiteLabelPage";
 
 function App() {
   return (
@@ -36,6 +41,11 @@ function App() {
             <Route path="/ab-tests" element={<ABTestsPage />} />
             <Route path="/goals" element={<RevenueGoalsPage />} />
             <Route path="/faq" element={<FAQManagerPage />} />
+            <Route path="/templates" element={<TemplatesPage />} />
+            <Route path="/competitors" element={<CompetitorSpyPage />} />
+            <Route path="/affiliates" element={<AffiliatePage />} />
+            <Route path="/piracy" element={<PiracyPage />} />
+            <Route path="/white-label" element={<WhiteLabelPage />} />
             <Route path="/settings" element={<SettingsPage />} />
           </Routes>
         </main>
