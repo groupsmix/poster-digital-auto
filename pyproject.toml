@@ -11,6 +11,7 @@ fastapi = {extras = ["standard"], version = "^0.135.2"}
 psycopg = {extras = ["binary"], version = "^3.3.3"}
 python-dotenv = "^1.2.2"
 aiofiles = "^25.1.0"
+httpx = "^0.28.1"
 
 
 [build-system]
