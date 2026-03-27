@@ -206,6 +206,28 @@ export interface ScheduleSuggestion {
   color: string;
 }
 
+// Remix Engine types
+export interface RemixVariation {
+  remix_type: string;
+  variation_name: string;
+  product_name: string;
+  product_type: string;
+  brief: string;
+  target_audience: string;
+  suggested_price: string;
+  language: string;
+  key_differences: string;
+  child_product_id?: number;
+}
+
+export interface RemixResult {
+  success: boolean;
+  variations: RemixVariation[];
+  children_ids: number[];
+  provider: string | null;
+  message: string;
+}
+
 // Niche Finder types
 export interface NicheIdea {
   id: number;

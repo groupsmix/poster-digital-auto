@@ -3,6 +3,7 @@ import type {
   AnalyticsOverview, RevenueDataPoint, PlatformPerformance, TopProduct,
   CeoTrendPoint, AIProviderUsage, Insight,
   CalendarPost, ScheduleSuggestion,
+  RemixResult,
   NicheIdea, TrendPrediction,
 } from "./types";
 
@@ -241,4 +242,16 @@ export async function fetchTrendAlerts(): Promise<{ alerts: TrendPrediction[]; c
 
 export async function createProductFromTrend(trendId: number): Promise<{ success: boolean; product_id: number; message: string }> {
   return request(`/api/trends/${trendId}/create`, { method: "POST" });
+}
+
+// Remix Engine
+export async function remixProduct(productId: number, remixTypes?: string[]): Promise<RemixResult> {
+  return request<RemixResult>(`/api/products/${productId}/remix`, {
+    method: "POST",
+    body: JSON.stringify({ remix_types: remixTypes || null }),
+  });
+}
+
+export async function fetchRemixChildren(productId: number): Promise<{ children: Product[]; count: number }> {
+  return request(`/api/products/${productId}/children`);
 }

@@ -111,6 +111,7 @@ TASK_CHAINS: dict[str, list[str]] = {
     "captions": ["gemini_flash", "groq_llama", "cloudflare_llama", "cerebras_qwen"],
     "niche_finding": ["gemini_pro", "gemini_flash", "groq_llama", "mistral_large"],
     "trend_prediction": ["gemini_pro", "groq_llama", "mistral_large", "cerebras_qwen"],
+    "remix": ["gemini_pro", "gemini_flash", "groq_llama", "mistral_large"],
 }
 
 IMAGE_CHAIN: list[str] = ["cloudflare_flux", "huggingface_sd"]
