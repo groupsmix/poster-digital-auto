@@ -217,6 +217,93 @@ async def schedule_campaign_sequence(
     }
 
 
+async def process_scheduled_emails() -> dict:
+    """Process scheduled email drip sequences.
+
+    Checks email_campaigns for scheduled entries that are due to be sent.
+    Called by the background email drip cron worker.
+    """
+    sent_count = 0
+    errors = []
+
+    with get_db() as conn:
+        campaigns = conn.execute(
+            "SELECT * FROM email_campaigns WHERE status = 'scheduled'"
+        ).fetchall()
+
+    for campaign in campaigns:
+        campaign_dict = dict(campaign)
+        schedule_data_raw = campaign_dict.get("schedule_data", "")
+        if not schedule_data_raw:
+            continue
+
+        try:
+            schedule_data = json.loads(schedule_data_raw) if isinstance(schedule_data_raw, str) else schedule_data_raw
+        except (json.JSONDecodeError, TypeError):
+            continue
+
+        to_email = schedule_data.get("to_email", "")
+        to_name = schedule_data.get("to_name", "")
+        schedule = schedule_data.get("schedule", [])
+
+        if not to_email or not schedule:
+            continue
+
+        now = datetime.utcnow()
+        updated = False
+
+        for entry in schedule:
+            if entry.get("status") != "pending":
+                continue
+
+            send_at_str = entry.get("send_at", "")
+            if not send_at_str:
+                continue
+
+            try:
+                send_at = datetime.fromisoformat(send_at_str)
+            except (ValueError, TypeError):
+                continue
+
+            if now >= send_at:
+                result = await send_campaign_email(
+                    campaign_dict["id"],
+                    entry["email_type"],
+                    to_email,
+                    to_name,
+                )
+                if result.get("success"):
+                    entry["status"] = "sent"
+                    entry["sent_at"] = now.isoformat()
+                    sent_count += 1
+                else:
+                    entry["status"] = "failed"
+                    entry["error"] = result.get("message", "Unknown error")
+                    errors.append(f"Campaign {campaign_dict['id']}: {result.get('message')}")
+                updated = True
+
+        if updated:
+            # Check if all emails have been sent
+            all_done = all(e.get("status") in ("sent", "failed") for e in schedule)
+            new_status = "completed" if all_done else "scheduled"
+
+            with get_db() as conn:
+                conn.execute(
+                    """UPDATE email_campaigns
+                       SET schedule_data = ?, status = ?, updated_at = ?
+                       WHERE id = ?""",
+                    (
+                        json.dumps({"to_email": to_email, "to_name": to_name, "schedule": schedule}),
+                        new_status,
+                        now.isoformat(),
+                        campaign_dict["id"],
+                    ),
+                )
+
+    logger.info("Email drip worker: sent %d emails, %d errors", sent_count, len(errors))
+    return {"sent": sent_count, "errors": errors}
+
+
 def get_brevo_status() -> dict:
     """Get Brevo integration status and account info."""
     configured = is_configured()

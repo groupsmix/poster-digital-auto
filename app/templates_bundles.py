@@ -375,6 +375,63 @@ Return ONLY valid JSON (no markdown, no code fences):
 # ── Helpers ───────────────────────────────────────────────────────────
 
 
+def activate_seasonal_templates(current_month: int) -> dict:
+    """Activate templates and bundles whose auto_activate_month matches the current month.
+
+    Called by the seasonal cron job on the 1st of each month.
+    """
+    activated_templates = 0
+    activated_bundles = 0
+    with get_db() as conn:
+        # Activate matching templates
+        result = conn.execute(
+            """UPDATE product_templates
+               SET status = 'active', updated_at = ?
+               WHERE auto_activate_month = ? AND status != 'active'""",
+            (datetime.utcnow().isoformat(), current_month),
+        )
+        activated_templates = result.rowcount
+
+        # Deactivate templates from other months (that were auto-activated)
+        conn.execute(
+            """UPDATE product_templates
+               SET status = 'inactive', updated_at = ?
+               WHERE auto_activate_month IS NOT NULL
+               AND auto_activate_month != ?
+               AND status = 'active'""",
+            (datetime.utcnow().isoformat(), current_month),
+        )
+
+        # Activate matching bundles
+        result = conn.execute(
+            """UPDATE product_bundles
+               SET status = 'active', updated_at = ?
+               WHERE auto_activate_month = ? AND status != 'active'""",
+            (datetime.utcnow().isoformat(), current_month),
+        )
+        activated_bundles = result.rowcount
+
+        # Deactivate bundles from other months
+        conn.execute(
+            """UPDATE product_bundles
+               SET status = 'inactive', updated_at = ?
+               WHERE auto_activate_month IS NOT NULL
+               AND auto_activate_month != ?
+               AND status = 'active'""",
+            (datetime.utcnow().isoformat(), current_month),
+        )
+
+    logger.info(
+        "Seasonal activation: %d templates, %d bundles activated for month %d",
+        activated_templates, activated_bundles, current_month,
+    )
+    return {
+        "activated_templates": activated_templates,
+        "activated_bundles": activated_bundles,
+        "month": current_month,
+    }
+
+
 def _enrich_template(t: dict) -> dict:
     """Parse JSON fields in a template dict."""
     t["keywords"] = _parse_json(t.get("keywords"), [])

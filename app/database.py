@@ -51,6 +51,7 @@ def init_db():
             niche_data TEXT DEFAULT '{}',
             trend_data TEXT DEFAULT '{}',
             remix_parent_id INTEGER,
+            tenant_id INTEGER,
             created_at TEXT DEFAULT (datetime('now')),
             updated_at TEXT DEFAULT (datetime('now'))
         );

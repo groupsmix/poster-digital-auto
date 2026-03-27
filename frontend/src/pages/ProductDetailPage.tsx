@@ -1,14 +1,14 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { ArrowLeft, Copy, Download, Check, ClipboardList, Send, Edit3, Shuffle, X, Globe, FlaskConical, DollarSign, Mail, Loader2, Tag, Clock, Package, Zap, RefreshCw, Play, Pause, Volume2, FileText } from "lucide-react";
-import { fetchProduct, generateCaptions, triggerAutoPost, updateSocialPost, fetchAutoPostConfig, remixProduct, fetchRemixChildren, createABTest, fetchPriceSuggestions, generateEmailCampaign, fetchEmailCampaign, repurposeProduct, fetchRepurposedContent, generateVoiceover } from "@/lib/api";
+import { fetchProduct, generateCaptions, triggerAutoPost, updateSocialPost, fetchAutoPostConfig, remixProduct, fetchRemixChildren, createABTest, fetchPriceSuggestions, generateEmailCampaign, fetchEmailCampaign, repurposeProduct, fetchRepurposedContent, generateVoiceover, fetchRecommendations, fetchFrequentlyBought } from "@/lib/api";
 import type { Product, AutoPostConfig, PriceSuggestions, EmailCampaign, RepurposedContent, VoiceOverResult } from "@/lib/types";
 import StatusBadge from "@/components/StatusBadge";
 import CeoScoreBadge from "@/components/CeoScoreBadge";
 import Spinner from "@/components/Spinner";
 import { toast } from "sonner";
 
-type Tab = "copy" | "research" | "social" | "email" | "pricing" | "repurpose" | "voiceover" | "logs";
+type Tab = "copy" | "research" | "social" | "email" | "pricing" | "repurpose" | "voiceover" | "upsell" | "logs";
 
 const REMIX_TYPE_OPTIONS = [
   { key: "audience", label: "Audience", description: "Student, Business, Family, Freelancer" },
@@ -745,6 +745,104 @@ function RepurposeTab({ product }: { product: Product }) {
   );
 }
 
+function UpsellTab({ product }: { product: Product }) {
+  const [recommendations, setRecommendations] = useState<Record<string, unknown>[]>([]);
+  const [frequentlyBought, setFrequentlyBought] = useState<Record<string, unknown>[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    Promise.all([
+      fetchRecommendations(product.id).catch(() => ({ recommendations: [] })),
+      fetchFrequentlyBought(product.id).catch(() => ({ related_products: [] })),
+    ])
+      .then(([recRes, fbRes]) => {
+        const recs = (recRes as { recommendations?: Record<string, unknown>[] }).recommendations || [];
+        setRecommendations(recs);
+        setFrequentlyBought((fbRes as { related_products: Record<string, unknown>[] }).related_products || []);
+      })
+      .finally(() => setLoading(false));
+  }, [product.id]);
+
+  if (loading) {
+    return (
+      <div className="flex justify-center py-10">
+        <Spinner className="h-6 w-6" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* AI Recommendations */}
+      <div>
+        <h3 className="text-sm font-semibold text-zinc-200 mb-3 flex items-center gap-2">
+          <Zap className="h-4 w-4 text-violet-400" />
+          AI Recommendations ({recommendations.length})
+        </h3>
+        {recommendations.length === 0 ? (
+          <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-8 text-center">
+            <Tag className="mx-auto h-8 w-8 text-zinc-600" />
+            <p className="mt-2 text-sm text-zinc-400">
+              No upsell recommendations yet. Add more products to your catalog to enable cross-selling.
+            </p>
+          </div>
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2">
+            {recommendations.map((rec, idx) => (
+              <div key={idx} className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <p className="font-medium text-zinc-200">{String(rec.name || rec.product_name || "Product")}</p>
+                    <p className="mt-1 text-xs text-zinc-400">{String(rec.product_type || rec.type || "")}</p>
+                  </div>
+                  {rec.match_score != null && (
+                    <span className="rounded bg-violet-500/20 px-2 py-0.5 text-xs font-medium text-violet-400">
+                      {String(rec.match_score)}% match
+                    </span>
+                  )}
+                </div>
+                {rec.reason && (
+                  <p className="mt-2 text-xs text-zinc-500">{String(rec.reason)}</p>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Frequently Bought Together */}
+      <div>
+        <h3 className="text-sm font-semibold text-zinc-200 mb-3 flex items-center gap-2">
+          <Package className="h-4 w-4 text-emerald-400" />
+          Frequently Bought Together ({frequentlyBought.length})
+        </h3>
+        {frequentlyBought.length === 0 ? (
+          <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-8 text-center">
+            <Package className="mx-auto h-8 w-8 text-zinc-600" />
+            <p className="mt-2 text-sm text-zinc-400">
+              No frequently-bought-together data yet. This builds up from sales history.
+            </p>
+          </div>
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2">
+            {frequentlyBought.map((item, idx) => (
+              <div key={idx} className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4">
+                <p className="font-medium text-zinc-200">{String(item.name || item.product_name || "Product")}</p>
+                <p className="mt-1 text-xs text-zinc-400">{String(item.product_type || item.type || "")}</p>
+                {item.co_purchase_count != null && (
+                  <p className="mt-1 text-xs text-emerald-400">
+                    Bought together {String(item.co_purchase_count)} times
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function VoiceOverTab({ product }: { product: Product }) {
   const [result, setResult] = useState<VoiceOverResult | null>(null);
   const [loading, setLoading] = useState(false);
@@ -953,6 +1051,7 @@ export default function ProductDetailPage() {
     { key: "pricing", label: "Pricing" },
     { key: "repurpose", label: "Repurpose" },
     { key: "voiceover", label: "Voice-Over" },
+    { key: "upsell", label: "Upsell" },
     { key: "logs", label: "Pipeline Logs" },
   ];
 
@@ -1322,6 +1421,10 @@ export default function ProductDetailPage() {
 
       {tab === "voiceover" && (
         <VoiceOverTab product={product} />
+      )}
+
+      {tab === "upsell" && (
+        <UpsellTab product={product} />
       )}
 
       {tab === "logs" && (

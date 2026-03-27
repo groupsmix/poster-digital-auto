@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Package, Clock, CheckCircle, Send, AlertTriangle, PlusCircle, Cpu, ArrowRight, TrendingUp, Zap, Target } from "lucide-react";
-import { fetchStats, fetchProducts, fetchTrendAlerts, fetchGoals } from "@/lib/api";
+import { Package, Clock, CheckCircle, Send, AlertTriangle, PlusCircle, Cpu, ArrowRight, TrendingUp, Zap, Target, ArrowRightLeft } from "lucide-react";
+import { fetchStats, fetchProducts, fetchTrendAlerts, fetchGoals, fetchArbitrage } from "@/lib/api";
 import type { Stats, Product, TrendPrediction, RevenueGoal } from "@/lib/types";
 import StatusBadge from "@/components/StatusBadge";
 import Spinner from "@/components/Spinner";
@@ -27,15 +27,19 @@ export default function DashboardPage() {
   const [recent, setRecent] = useState<Product[]>([]);
   const [trendAlerts, setTrendAlerts] = useState<TrendPrediction[]>([]);
   const [activeGoal, setActiveGoal] = useState<RevenueGoal | null>(null);
+  const [arbitrageCount, setArbitrageCount] = useState(0);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all([fetchStats(), fetchProducts(), fetchTrendAlerts(), fetchGoals()])
-      .then(([s, p, t, g]) => {
+    Promise.all([fetchStats(), fetchProducts(), fetchTrendAlerts(), fetchGoals(), fetchArbitrage().catch(() => ({}))])
+      .then(([s, p, t, g, a]) => {
         setStats(s);
         setRecent(p.products.slice(0, 10));
         setTrendAlerts(t.alerts || []);
         setActiveGoal(g.active_goal);
+        const arb = a as Record<string, unknown>;
+        const opps = arb.opportunities;
+        setArbitrageCount(Array.isArray(opps) ? opps.length : 0);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -121,6 +125,27 @@ export default function DashboardPage() {
               <span>{activeGoal.sales_needed} sales needed</span>
             )}
           </div>
+        </Link>
+      )}
+
+      {/* Arbitrage Widget */}
+      {arbitrageCount > 0 && (
+        <Link
+          to="/arbitrage"
+          className="block rounded-xl border border-zinc-800 bg-zinc-900/50 p-5 transition-colors hover:border-emerald-500/50"
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <ArrowRightLeft className="h-5 w-5 text-emerald-400" />
+              <h3 className="font-semibold text-zinc-200">Arbitrage Opportunities</h3>
+            </div>
+            <span className="rounded bg-emerald-500/20 px-2.5 py-1 text-sm font-medium text-emerald-400">
+              {arbitrageCount} found
+            </span>
+          </div>
+          <p className="mt-2 text-sm text-zinc-400">
+            Cross-platform pricing differences detected. Review and optimize your pricing strategy.
+          </p>
         </Link>
       )}
 
