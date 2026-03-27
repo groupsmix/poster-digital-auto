@@ -11,6 +11,8 @@ import AnalyticsPage from "@/pages/AnalyticsPage";
 import CalendarPage from "@/pages/CalendarPage";
 import NicheFinderPage from "@/pages/NicheFinderPage";
 import TrendsPage from "@/pages/TrendsPage";
+import ABTestsPage from "@/pages/ABTestsPage";
+import RevenueGoalsPage from "@/pages/RevenueGoalsPage";
 
 function App() {
   return (
@@ -29,6 +31,8 @@ function App() {
             <Route path="/calendar" element={<CalendarPage />} />
             <Route path="/niches" element={<NicheFinderPage />} />
             <Route path="/trends" element={<TrendsPage />} />
+            <Route path="/ab-tests" element={<ABTestsPage />} />
+            <Route path="/goals" element={<RevenueGoalsPage />} />
           </Routes>
         </main>
         <Toaster

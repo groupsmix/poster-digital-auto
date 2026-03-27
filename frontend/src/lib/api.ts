@@ -5,6 +5,10 @@ import type {
   CalendarPost, ScheduleSuggestion,
   RemixResult,
   NicheIdea, TrendPrediction,
+  ABTest, ABTestResult, ABPattern,
+  PriceSuggestions, LaunchPricing, BundlePricing,
+  EmailCampaign, EmailCampaignResult,
+  RevenueGoal,
 } from "./types";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
@@ -254,4 +258,80 @@ export async function remixProduct(productId: number, remixTypes?: string[]): Pr
 
 export async function fetchRemixChildren(productId: number): Promise<{ children: Product[]; count: number }> {
   return request(`/api/products/${productId}/children`);
+}
+
+// A/B Testing
+export async function createABTest(variantId: number): Promise<ABTestResult> {
+  return request<ABTestResult>(`/api/variants/${variantId}/ab-test`, { method: "POST" });
+}
+
+export async function fetchABTests(status?: string): Promise<{ tests: ABTest[]; count: number }> {
+  const query = status ? `?status=${encodeURIComponent(status)}` : "";
+  return request(`/api/ab-tests${query}`);
+}
+
+export async function recordABSale(testId: number, variantId: number, revenue: number): Promise<Record<string, unknown>> {
+  return request(`/api/ab-tests/${testId}/sale`, {
+    method: "POST",
+    body: JSON.stringify({ variant_id: variantId, revenue }),
+  });
+}
+
+export async function detectABWinner(testId: number): Promise<Record<string, unknown>> {
+  return request(`/api/ab-tests/${testId}/detect-winner`, { method: "POST" });
+}
+
+export async function fetchABPatterns(): Promise<{ patterns: ABPattern[]; count: number }> {
+  return request("/api/ab-tests/patterns");
+}
+
+// Smart Pricing
+export async function fetchPriceSuggestions(productId: number): Promise<PriceSuggestions> {
+  return request<PriceSuggestions>(`/api/products/${productId}/pricing`);
+}
+
+export async function calculateLaunchPricing(
+  regularPrice: number,
+  discountPercent: number = 40,
+  durationHours: number = 48,
+): Promise<LaunchPricing> {
+  return request<LaunchPricing>("/api/pricing/launch", {
+    method: "POST",
+    body: JSON.stringify({ regular_price: regularPrice, discount_percent: discountPercent, duration_hours: durationHours }),
+  });
+}
+
+export async function calculateBundlePricing(
+  prices: number[],
+  discountPercent: number = 25,
+): Promise<BundlePricing> {
+  return request<BundlePricing>("/api/pricing/bundle", {
+    method: "POST",
+    body: JSON.stringify({ prices, discount_percent: discountPercent }),
+  });
+}
+
+// Email Marketing
+export async function generateEmailCampaign(productId: number): Promise<EmailCampaignResult> {
+  return request<EmailCampaignResult>(`/api/products/${productId}/email`, { method: "POST" });
+}
+
+export async function fetchEmailCampaign(productId: number): Promise<EmailCampaign> {
+  return request<EmailCampaign>(`/api/products/${productId}/email`);
+}
+
+// Revenue Goals
+export async function createRevenueGoal(targetAmount: number, period: string = "monthly"): Promise<{ success: boolean; goal: RevenueGoal; message: string }> {
+  return request("/api/goals", {
+    method: "POST",
+    body: JSON.stringify({ target_amount: targetAmount, period }),
+  });
+}
+
+export async function fetchGoals(): Promise<{ goals: RevenueGoal[]; active_goal: RevenueGoal | null; count: number }> {
+  return request("/api/goals");
+}
+
+export async function refreshGoals(): Promise<{ updated: RevenueGoal[]; count: number }> {
+  return request("/api/goals/refresh", { method: "POST" });
 }

@@ -243,6 +243,138 @@ export interface NicheIdea {
   created_at: string;
 }
 
+// A/B Testing types
+export interface ABTest {
+  id: number;
+  product_id: number;
+  product_name: string;
+  test_name: string;
+  variant_a_id: number;
+  variant_b_id: number;
+  variant_c_id: number;
+  winner_id: number | null;
+  status: string;
+  started_at: string;
+  ended_at: string | null;
+  variants: ABTestVariant[];
+}
+
+export interface ABTestVariant extends ProductVariant {
+  sales_count: number;
+  sales_revenue: number;
+  views_count: number;
+  conversion_rate: number;
+}
+
+export interface ABTestResult {
+  success: boolean;
+  test_id: number;
+  variant_a_id: number;
+  variant_b_id: number;
+  variant_c_id: number;
+  strategies: Record<string, string>;
+  insights: string;
+  provider: string | null;
+  message: string;
+}
+
+export interface ABPattern {
+  pattern: string;
+  detail: string;
+  confidence: number;
+}
+
+// Smart Pricing types
+export interface PriceSuggestions {
+  success: boolean;
+  product_id: number;
+  product_name: string;
+  suggestions: {
+    base_price: string;
+    platform_prices: Record<string, { price: string; reasoning: string }>;
+    launch_pricing: {
+      launch_price: string;
+      launch_duration_hours: number;
+      regular_price: string;
+      reasoning: string;
+    };
+    bundle_pricing: {
+      bundle_3_price: string;
+      individual_total: string;
+      savings_percent: string;
+      reasoning: string;
+    };
+    pricing_tiers: { tier: string; price: string; includes: string }[];
+    competitor_analysis: string;
+    confidence: number;
+  };
+  provider: string | null;
+  generated_at: string;
+  message: string;
+}
+
+export interface LaunchPricing {
+  regular_price: string;
+  launch_price: string;
+  discount_percent: string;
+  savings: string;
+  duration_hours: number;
+  description: string;
+}
+
+export interface BundlePricing {
+  individual_total: string;
+  bundle_price: string;
+  savings: string;
+  savings_percent: string;
+  item_count: number;
+  description: string;
+}
+
+// Email Marketing types
+export interface EmailCampaign {
+  id: number;
+  product_id: number;
+  subject_lines: string[];
+  email_body: { subject: string; body: string };
+  follow_up_day3: { subject: string; body: string };
+  follow_up_day7: { subject: string; body: string };
+  status: string;
+  created_at: string;
+}
+
+export interface EmailCampaignResult {
+  success: boolean;
+  campaign: EmailCampaign;
+  provider: string | null;
+  message: string;
+}
+
+// Revenue Goals types
+export interface RevenueGoal {
+  id: number;
+  target_amount: number;
+  period: string;
+  current_amount: number;
+  products_needed: number;
+  status: string;
+  created_at: string;
+  progress_percent: number;
+  remaining: number;
+  avg_sale_price: number;
+  sales_this_period: number;
+  sales_needed: number;
+  total_products: number;
+  status_label: string;
+  suggestions: GoalSuggestion[];
+}
+
+export interface GoalSuggestion {
+  type: string;
+  icon: string;
+  message: string;
+}
+
 // Trend Predictor types
 export interface TrendPrediction {
   id: number;
