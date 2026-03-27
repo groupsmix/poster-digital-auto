@@ -1,0 +1,19 @@
+[Unit]
+Description=AI Product Factory - FastAPI Backend
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/opt/ai-product-factory
+Environment="PATH=/opt/ai-product-factory/.venv/bin:/usr/local/bin:/usr/bin:/bin"
+EnvironmentFile=/opt/ai-product-factory/.env
+ExecStart=/opt/ai-product-factory/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
