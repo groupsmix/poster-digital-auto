@@ -7,6 +7,13 @@ import Spinner from "@/components/Spinner";
 
 const SELLING_PLATFORMS = ["Gumroad", "Payhip", "Lemon Squeezy"];
 const SOCIAL_PLATFORMS = ["Reddit", "Tumblr", "Twitter", "Pinterest", "Telegram", "Instagram", "TikTok", "Facebook", "Quora"];
+const LANGUAGES = [
+  { code: "en", label: "English" },
+  { code: "ar", label: "Arabic" },
+  { code: "fr", label: "French" },
+  { code: "es", label: "Spanish" },
+  { code: "de", label: "German" },
+];
 
 export default function NewProductPage() {
   const navigate = useNavigate();
@@ -14,11 +21,22 @@ export default function NewProductPage() {
   const [productType, setProductType] = useState("digital");
   const [brief, setBrief] = useState("");
   const [platforms, setPlatforms] = useState<string[]>([]);
+  const [languages, setLanguages] = useState<string[]>(["en"]);
   const [planMode, setPlanMode] = useState("A");
   const [saving, setSaving] = useState(false);
 
   function togglePlatform(p: string) {
     setPlatforms((prev) => (prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p]));
+  }
+
+  function toggleLanguage(code: string) {
+    setLanguages((prev) => {
+      if (prev.includes(code)) {
+        if (prev.length === 1) return prev;
+        return prev.filter((l) => l !== code);
+      }
+      return [...prev, code];
+    });
   }
 
   async function handleCreate(andGenerate: boolean) {
@@ -33,7 +51,7 @@ export default function NewProductPage() {
         product_type: productType,
         brief: brief.trim(),
         target_platforms: platforms,
-        target_languages: ["en"],
+        target_languages: languages,
         status: "pending",
         plan_mode: planMode,
       });
@@ -140,6 +158,28 @@ export default function NewProductPage() {
                 }`}
               >
                 {p}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Language Selection */}
+        <div>
+          <label className="block text-sm font-medium text-zinc-300">Target Languages</label>
+          <p className="mt-0.5 text-xs text-zinc-500">AI will generate culturally adapted content for each language</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {LANGUAGES.map((lang) => (
+              <button
+                key={lang.code}
+                type="button"
+                onClick={() => toggleLanguage(lang.code)}
+                className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
+                  languages.includes(lang.code)
+                    ? "border-sky-500 bg-sky-500/20 text-sky-300"
+                    : "border-zinc-700 bg-zinc-800 text-zinc-400 hover:border-zinc-600"
+                }`}
+              >
+                {lang.label}
               </button>
             ))}
           </div>

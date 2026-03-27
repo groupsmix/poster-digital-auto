@@ -1,11 +1,15 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Package, Trash2 } from "lucide-react";
+import { Package, Trash2, GitBranch } from "lucide-react";
 import { fetchProducts, deleteProduct } from "@/lib/api";
 import type { Product } from "@/lib/types";
 import StatusBadge from "@/components/StatusBadge";
 import Spinner from "@/components/Spinner";
 import { toast } from "sonner";
+
+const LANGUAGE_LABELS: Record<string, string> = {
+  en: "English", ar: "Arabic", fr: "French", es: "Spanish", de: "German",
+};
 
 const FILTERS = ["All", "pending", "draft", "researching", "creating", "review", "approved", "published", "rejected"];
 
@@ -76,47 +80,96 @@ export default function ProductListPage() {
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {products.map((p) => (
-            <div key={p.id} className="group rounded-xl border border-zinc-800 bg-zinc-900/50 p-5 transition-colors hover:border-zinc-700">
-              <div className="flex items-start justify-between">
-                <Link to={`/products/${p.id}`} className="flex-1">
-                  <h3 className="font-semibold text-zinc-100 group-hover:text-violet-300 transition-colors">{p.name}</h3>
-                </Link>
-                <button
-                  onClick={() => handleDelete(p.id, p.name)}
-                  disabled={deleting === p.id}
-                  className="ml-2 rounded-md p-1.5 text-zinc-500 transition-colors hover:bg-red-500/10 hover:text-red-400"
-                  title="Delete product"
-                >
-                  {deleting === p.id ? <Spinner className="h-4 w-4" /> : <Trash2 className="h-4 w-4" />}
-                </button>
-              </div>
+          {(() => {
+            const parentProducts = products.filter((p) => !p.remix_parent_id);
+            const childrenMap = new Map<number, Product[]>();
+            products.forEach((p) => {
+              if (p.remix_parent_id) {
+                const existing = childrenMap.get(p.remix_parent_id) || [];
+                existing.push(p);
+                childrenMap.set(p.remix_parent_id, existing);
+              }
+            });
 
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                <StatusBadge status={p.status} />
-                <span className="text-xs text-zinc-500">
-                  Plan {p.plan_mode}
-                </span>
-              </div>
+            return parentProducts.map((p) => {
+              const children = childrenMap.get(p.id) || [];
+              return (
+                <div key={p.id} className="space-y-2">
+                  <div className="group rounded-xl border border-zinc-800 bg-zinc-900/50 p-5 transition-colors hover:border-zinc-700">
+                    <div className="flex items-start justify-between">
+                      <Link to={`/products/${p.id}`} className="flex-1">
+                        <h3 className="font-semibold text-zinc-100 group-hover:text-violet-300 transition-colors">{p.name}</h3>
+                      </Link>
+                      <button
+                        onClick={() => handleDelete(p.id, p.name)}
+                        disabled={deleting === p.id}
+                        className="ml-2 rounded-md p-1.5 text-zinc-500 transition-colors hover:bg-red-500/10 hover:text-red-400"
+                        title="Delete product"
+                      >
+                        {deleting === p.id ? <Spinner className="h-4 w-4" /> : <Trash2 className="h-4 w-4" />}
+                      </button>
+                    </div>
 
-              {p.target_platforms.length > 0 && (
-                <div className="mt-3 flex flex-wrap gap-1">
-                  {p.target_platforms.map((pl) => (
-                    <span key={pl} className="rounded bg-zinc-800 px-2 py-0.5 text-xs text-zinc-400">
-                      {pl}
-                    </span>
-                  ))}
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <StatusBadge status={p.status} />
+                      <span className="text-xs text-zinc-500">
+                        Plan {p.plan_mode}
+                      </span>
+                      {children.length > 0 && (
+                        <span className="inline-flex items-center gap-1 rounded bg-fuchsia-500/20 px-2 py-0.5 text-xs font-medium text-fuchsia-300">
+                          <GitBranch className="h-3 w-3" />
+                          {children.length} remix{children.length !== 1 ? "es" : ""}
+                        </span>
+                      )}
+                    </div>
+
+                    {p.target_platforms.length > 0 && (
+                      <div className="mt-3 flex flex-wrap gap-1">
+                        {p.target_platforms.map((pl) => (
+                          <span key={pl} className="rounded bg-zinc-800 px-2 py-0.5 text-xs text-zinc-400">
+                            {pl}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="mt-3 flex items-center justify-between text-xs text-zinc-500">
+                      <span>{new Date(p.created_at).toLocaleDateString()}</span>
+                      <Link to={`/products/${p.id}`} className="text-violet-400 hover:text-violet-300">
+                        View details &rarr;
+                      </Link>
+                    </div>
+                  </div>
+
+                  {/* Remix children nested under parent */}
+                  {children.length > 0 && (
+                    <div className="ml-4 space-y-2 border-l-2 border-fuchsia-500/30 pl-3">
+                      {children.map((child) => (
+                        <Link
+                          key={child.id}
+                          to={`/products/${child.id}`}
+                          className="block rounded-lg border border-zinc-800 bg-zinc-900/30 p-3 transition-colors hover:border-zinc-700"
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-medium text-zinc-200">{child.name}</span>
+                            <span className="text-xs text-violet-400">View &rarr;</span>
+                          </div>
+                          <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                            <StatusBadge status={child.status} />
+                            {child.target_languages.map((lang) => (
+                              <span key={lang} className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-400">
+                                {LANGUAGE_LABELS[lang] || lang}
+                              </span>
+                            ))}
+                          </div>
+                        </Link>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              )}
-
-              <div className="mt-3 flex items-center justify-between text-xs text-zinc-500">
-                <span>{new Date(p.created_at).toLocaleDateString()}</span>
-                <Link to={`/products/${p.id}`} className="text-violet-400 hover:text-violet-300">
-                  View details →
-                </Link>
-              </div>
-            </div>
-          ))}
+              );
+            });
+          })()}
         </div>
       )}
     </div>

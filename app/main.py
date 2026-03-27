@@ -27,6 +27,7 @@ from app.agents.niche_finder import (
     update_niche_status,
 )
 from app.agents.pipeline import run_pipeline
+from app.agents.remix_engine import get_remix_children, run_remix
 from app.agents.trend_predictor import (
     create_product_from_trend,
     get_active_alerts,
@@ -211,6 +212,10 @@ class BatchScheduleRequest(BaseModel):
     start_date: str | None = None
     days_span: int = 30
     posts_per_day: int = 1
+
+
+class RemixRequest(BaseModel):
+    remix_types: list[str] | None = None
 
 
 # ── Helper Functions ──────────────────────────────────────────────────
@@ -975,6 +980,27 @@ async def batch_schedule(body: BatchScheduleRequest):
 async def platform_colors():
     """Get platform color mapping for calendar UI."""
     return get_platform_colors()
+
+
+# ══════════════════════════════════════════════════════════════════════
+# REMIX ENGINE (Agent 4)
+# ══════════════════════════════════════════════════════════════════════
+
+
+@app.post("/api/products/{product_id}/remix")
+async def remix_product(product_id: int, body: RemixRequest):
+    """Remix a product into multiple variations."""
+    result = await run_remix(product_id, remix_types=body.remix_types)
+    if not result["success"]:
+        raise HTTPException(status_code=400, detail=result["message"])
+    return result
+
+
+@app.get("/api/products/{product_id}/children")
+async def get_product_children(product_id: int):
+    """Get all remix children of a product."""
+    children = get_remix_children(product_id)
+    return {"children": children, "count": len(children)}
 
 
 # ══════════════════════════════════════════════════════════════════════
