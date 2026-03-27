@@ -5,7 +5,6 @@ AI failover system, and platform settings management.
 """
 
 import json
-import os
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
@@ -16,9 +15,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
+from app.agents.caption_generator import generate_captions
+from app.agents.pipeline import run_pipeline
 from app.ai_failover import (
-    call_image_with_failover,
-    call_text_with_failover,
     get_all_provider_statuses,
     load_provider_statuses_from_db,
     reset_all_daily_limits,
@@ -406,6 +405,60 @@ async def serve_image(filename: str):
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Image not found")
     return FileResponse(file_path)
+
+
+# ══════════════════════════════════════════════════════════════════════
+# PIPELINE & CAPTIONS
+# ══════════════════════════════════════════════════════════════════════
+
+@app.post("/api/products/{product_id}/generate")
+async def generate_product(product_id: int):
+    """Run the full AI product generation pipeline.
+
+    Steps: Research -> Create -> Images -> CEO Review -> (Revision) -> Save
+    """
+    with get_db() as conn:
+        product = conn.execute("SELECT * FROM products WHERE id = ?", (product_id,)).fetchone()
+        if not product:
+            raise HTTPException(status_code=404, detail="Product not found")
+
+    result = await run_pipeline(product_id)
+    if not result["success"]:
+        raise HTTPException(status_code=500, detail=result["message"])
+    return result
+
+
+@app.post("/api/products/{product_id}/captions")
+async def generate_product_captions(product_id: int):
+    """Generate social media captions for a product."""
+    with get_db() as conn:
+        product = conn.execute("SELECT * FROM products WHERE id = ?", (product_id,)).fetchone()
+        if not product:
+            raise HTTPException(status_code=404, detail="Product not found")
+        product_dict = row_to_dict(product)
+
+    product_name = product_dict["name"]
+    product_description = product_dict.get("brief", "")
+
+    # Try to get a description from variants if brief is empty
+    if not product_description:
+        with get_db() as conn:
+            variant = conn.execute(
+                "SELECT description FROM product_variants WHERE product_id = ? LIMIT 1",
+                (product_id,),
+            ).fetchone()
+            if variant:
+                product_description = variant["description"]
+
+    result = await generate_captions(
+        product_id=product_id,
+        product_name=product_name,
+        product_description=product_description,
+        product_url="",
+    )
+    if not result["success"]:
+        raise HTTPException(status_code=500, detail=result["message"])
+    return result
 
 
 # ══════════════════════════════════════════════════════════════════════
