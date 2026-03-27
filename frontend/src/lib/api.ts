@@ -3,6 +3,7 @@ import type {
   AnalyticsOverview, RevenueDataPoint, PlatformPerformance, TopProduct,
   CeoTrendPoint, AIProviderUsage, Insight,
   CalendarPost, ScheduleSuggestion,
+  NicheIdea, TrendPrediction,
 } from "./types";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
@@ -198,4 +199,46 @@ export async function batchScheduleProducts(body: {
 
 export async function fetchPlatformColors(): Promise<Record<string, string>> {
   return request("/api/calendar/platform-colors");
+}
+
+// Niche Finder
+export async function scanNiches(): Promise<{ success: boolean; ideas: NicheIdea[]; scan_summary: string; message: string }> {
+  return request("/api/niches/scan", { method: "POST" });
+}
+
+export async function fetchNiches(status?: string, sortBy?: string): Promise<{ ideas: NicheIdea[]; count: number }> {
+  const params = new URLSearchParams();
+  if (status) params.set("status", status);
+  if (sortBy) params.set("sort_by", sortBy);
+  const query = params.toString() ? `?${params}` : "";
+  return request(`/api/niches${query}`);
+}
+
+export async function createProductFromNiche(nicheId: number): Promise<{ success: boolean; product_id: number; message: string }> {
+  return request(`/api/niches/${nicheId}/create`, { method: "POST" });
+}
+
+export async function updateNicheStatus(nicheId: number, status: string): Promise<NicheIdea> {
+  return request<NicheIdea>(`/api/niches/${nicheId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ status }),
+  });
+}
+
+// Trend Predictor
+export async function scanTrends(): Promise<{ success: boolean; predictions: TrendPrediction[]; scan_summary: string; message: string }> {
+  return request("/api/trends/scan", { method: "POST" });
+}
+
+export async function fetchTrends(status?: string): Promise<{ predictions: TrendPrediction[]; count: number }> {
+  const query = status ? `?status=${encodeURIComponent(status)}` : "";
+  return request(`/api/trends${query}`);
+}
+
+export async function fetchTrendAlerts(): Promise<{ alerts: TrendPrediction[]; count: number }> {
+  return request("/api/trends/alerts");
+}
+
+export async function createProductFromTrend(trendId: number): Promise<{ success: boolean; product_id: number; message: string }> {
+  return request(`/api/trends/${trendId}/create`, { method: "POST" });
 }

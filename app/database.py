@@ -117,6 +117,21 @@ def init_db():
             created_at TEXT DEFAULT (datetime('now'))
         );
 
+        CREATE TABLE IF NOT EXISTS trend_predictions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            trend_name TEXT NOT NULL,
+            predicted_peak TEXT,
+            current_phase TEXT DEFAULT 'early_rise',
+            confidence INTEGER DEFAULT 50,
+            action TEXT,
+            time_remaining TEXT,
+            category TEXT DEFAULT '',
+            evidence TEXT DEFAULT '',
+            status TEXT DEFAULT 'active',
+            created_product_id INTEGER,
+            created_at TEXT DEFAULT (datetime('now'))
+        );
+
         CREATE TABLE IF NOT EXISTS analytics (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             product_id INTEGER,

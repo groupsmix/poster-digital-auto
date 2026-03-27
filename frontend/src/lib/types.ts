@@ -205,3 +205,34 @@ export interface ScheduleSuggestion {
   tip: string;
   color: string;
 }
+
+// Niche Finder types
+export interface NicheIdea {
+  id: number;
+  product_name: string;
+  demand_score: number;
+  competition: string;
+  monthly_searches: number;
+  evidence: string;
+  suggested_price: string;
+  best_platforms: string[];
+  status: string;
+  created_product_id: number | null;
+  created_at: string;
+}
+
+// Trend Predictor types
+export interface TrendPrediction {
+  id: number;
+  trend_name: string;
+  predicted_peak: string;
+  current_phase: string;
+  confidence: number;
+  action: string;
+  time_remaining: string;
+  category: string;
+  evidence: string;
+  status: string;
+  created_product_id: number | null;
+  created_at: string;
+}

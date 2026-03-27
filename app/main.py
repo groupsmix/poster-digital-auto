@@ -6,6 +6,7 @@ AI failover system, and platform settings management.
 
 import asyncio
 import json
+import logging
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
@@ -19,7 +20,19 @@ from pydantic import BaseModel
 
 from app.agents.auto_poster import auto_post, get_auto_post_config
 from app.agents.caption_generator import generate_captions
+from app.agents.niche_finder import (
+    create_product_from_niche,
+    get_all_niches,
+    run_niche_scan,
+    update_niche_status,
+)
 from app.agents.pipeline import run_pipeline
+from app.agents.trend_predictor import (
+    create_product_from_trend,
+    get_active_alerts,
+    get_all_trends,
+    run_trend_scan,
+)
 from app.ai_failover import (
     get_all_provider_statuses,
     load_provider_statuses_from_db,
@@ -59,6 +72,38 @@ IMAGES_DIR.mkdir(exist_ok=True)
 
 # ── Lifespan ───────────────────────────────────────────────────────────
 
+async def _niche_cron_loop():
+    """Background cron: run niche scan daily at 6:00 AM UTC."""
+    while True:
+        now = datetime.utcnow()
+        # Calculate seconds until next 6:00 AM UTC
+        target = now.replace(hour=6, minute=0, second=0, microsecond=0)
+        if now >= target:
+            # Already past 6 AM today, schedule for tomorrow
+            target = target.replace(day=target.day + 1)
+        wait_seconds = (target - now).total_seconds()
+        await asyncio.sleep(wait_seconds)
+        try:
+            await run_niche_scan()
+        except Exception as e:
+            logging.getLogger(__name__).error("Niche cron failed: %s", e)
+
+
+async def _trend_cron_loop():
+    """Background cron: run trend scan daily at 6:30 AM UTC."""
+    while True:
+        now = datetime.utcnow()
+        target = now.replace(hour=6, minute=30, second=0, microsecond=0)
+        if now >= target:
+            target = target.replace(day=target.day + 1)
+        wait_seconds = (target - now).total_seconds()
+        await asyncio.sleep(wait_seconds)
+        try:
+            await run_trend_scan()
+        except Exception as e:
+            logging.getLogger(__name__).error("Trend cron failed: %s", e)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize database and seed data on startup."""
@@ -66,14 +111,17 @@ async def lifespan(app: FastAPI):
     seed_platform_settings()
     seed_ai_status()
     load_provider_statuses_from_db()
-    # Start background scheduler for publishing scheduled posts
+    # Start background tasks
     scheduler_task = asyncio.create_task(scheduler_loop())
+    niche_cron_task = asyncio.create_task(_niche_cron_loop())
+    trend_cron_task = asyncio.create_task(_trend_cron_loop())
     yield
-    scheduler_task.cancel()
-    try:
-        await scheduler_task
-    except asyncio.CancelledError:
-        pass
+    for task in (scheduler_task, niche_cron_task, trend_cron_task):
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
 
 
 app = FastAPI(title="AI Product Factory", version="1.0.0", lifespan=lifespan)
@@ -927,3 +975,88 @@ async def batch_schedule(body: BatchScheduleRequest):
 async def platform_colors():
     """Get platform color mapping for calendar UI."""
     return get_platform_colors()
+
+
+# ══════════════════════════════════════════════════════════════════════
+# NICHE FINDER (Agent 0)
+# ══════════════════════════════════════════════════════════════════════
+
+
+class NicheUpdateRequest(BaseModel):
+    status: str
+
+
+@app.post("/api/niches/scan")
+async def scan_niches():
+    """Run the Niche Finder AI agent to discover product ideas."""
+    result = await run_niche_scan()
+    if not result["success"]:
+        raise HTTPException(status_code=500, detail=result["message"])
+    return result
+
+
+@app.get("/api/niches")
+async def list_niches(
+    status: str | None = Query(None, description="Filter by status: new, approved, rejected, archived, created"),
+    sort_by: str = Query("demand_score", description="Sort by: demand_score, created_at, monthly_searches, competition"),
+):
+    """List all discovered niche ideas."""
+    ideas = get_all_niches(status=status, sort_by=sort_by)
+    return {"ideas": ideas, "count": len(ideas)}
+
+
+@app.post("/api/niches/{niche_id}/create")
+async def create_from_niche(niche_id: int):
+    """Create a product from a niche idea and trigger the pipeline."""
+    result = await create_product_from_niche(niche_id)
+    if not result["success"]:
+        raise HTTPException(status_code=404, detail=result["message"])
+    return result
+
+
+@app.patch("/api/niches/{niche_id}")
+async def update_niche(niche_id: int, body: NicheUpdateRequest):
+    """Update a niche idea status (approve/reject/archive)."""
+    result = update_niche_status(niche_id, body.status)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Niche idea not found or invalid status")
+    return result
+
+
+# ══════════════════════════════════════════════════════════════════════
+# TREND PREDICTOR (Agent 1)
+# ══════════════════════════════════════════════════════════════════════
+
+
+@app.post("/api/trends/scan")
+async def scan_trends():
+    """Run the Trend Predictor AI agent to find upcoming trends."""
+    result = await run_trend_scan()
+    if not result["success"]:
+        raise HTTPException(status_code=500, detail=result["message"])
+    return result
+
+
+@app.get("/api/trends")
+async def list_trends(
+    status: str | None = Query(None, description="Filter by status: active, expired, created"),
+):
+    """List all trend predictions."""
+    predictions = get_all_trends(status=status)
+    return {"predictions": predictions, "count": len(predictions)}
+
+
+@app.get("/api/trends/alerts")
+async def trend_alerts():
+    """Get high-confidence active trend alerts for dashboard banner."""
+    alerts = get_active_alerts()
+    return {"alerts": alerts, "count": len(alerts)}
+
+
+@app.post("/api/trends/{trend_id}/create")
+async def create_from_trend(trend_id: int):
+    """Create a product from a trend prediction."""
+    result = await create_product_from_trend(trend_id)
+    if not result["success"]:
+        raise HTTPException(status_code=404, detail=result["message"])
+    return result
