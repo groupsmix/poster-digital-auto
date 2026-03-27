@@ -68,6 +68,63 @@ from app.analytics import (
     record_event,
 )
 from app.email_marketing import generate_email_campaign, get_email_campaign
+from app.brevo_integration import (
+    get_brevo_status,
+    send_campaign_email,
+    schedule_campaign_sequence,
+)
+from app.persona_ai import generate_personas_from_data
+from app.templates_bundles import (
+    create_template,
+    get_all_templates,
+    get_template,
+    update_template,
+    delete_template,
+    create_product_from_template,
+    create_bundle,
+    get_all_bundles,
+    get_bundle,
+    delete_bundle,
+    generate_bundle_listing,
+)
+from app.agents.competitor_spy import (
+    run_competitor_scan,
+    get_competitors,
+    get_competitor_alerts,
+    dismiss_alert,
+)
+from app.cross_platform_arbitrage import analyze_arbitrage
+from app.upsell_engine import get_recommendations, get_frequently_bought_together
+from app.affiliate_system import (
+    create_affiliate,
+    get_all_affiliates,
+    update_affiliate,
+    delete_affiliate,
+    generate_referral_link,
+    get_referral_links,
+    track_referral_click,
+    track_referral_conversion,
+    get_referral_stats,
+    generate_affiliate_kit,
+)
+from app.piracy_protection import (
+    generate_watermark_id,
+    get_protection_status,
+    record_scan_result,
+    generate_dmca_template,
+    get_dmca_requests,
+    update_dmca_status,
+)
+from app.white_label import (
+    get_tiers,
+    create_tenant,
+    get_all_tenants,
+    get_tenant,
+    update_tenant,
+    delete_tenant,
+    check_tenant_limits,
+    get_tenant_stats,
+)
 from app.calendar_scheduler import (
     auto_schedule_posts,
     batch_schedule_products,
@@ -280,6 +337,123 @@ class FAQUpdateRequest(BaseModel):
 
 class FAQSuggestRequest(BaseModel):
     question: str
+
+
+# ── New Feature Pydantic Models ──────────────────────────────────────
+
+class TemplateCreateRequest(BaseModel):
+    name: str
+    product_type: str = "digital"
+    tone: str = ""
+    keywords: list[str] | None = None
+    price_min: float = 5.0
+    price_max: float = 15.0
+    platforms: list[str] | None = None
+    languages: list[str] | None = None
+    brief_template: str = ""
+    seasonal_tag: str = ""
+    auto_activate_month: int | None = None
+
+
+class TemplateUpdateRequest(BaseModel):
+    name: str | None = None
+    product_type: str | None = None
+    tone: str | None = None
+    keywords: list[str] | None = None
+    price_min: float | None = None
+    price_max: float | None = None
+    platforms: list[str] | None = None
+    languages: list[str] | None = None
+    brief_template: str | None = None
+    seasonal_tag: str | None = None
+    auto_activate_month: int | None = None
+
+
+class TemplateProductRequest(BaseModel):
+    product_name: str
+
+
+class BundleCreateRequest(BaseModel):
+    name: str
+    product_ids: list[int]
+    discount_percent: float = 25.0
+    seasonal_tag: str = ""
+    auto_activate_month: int | None = None
+
+
+class CompetitorScanRequest(BaseModel):
+    niches: str = ""
+
+
+class EmailSendRequest(BaseModel):
+    email_type: str
+    to_email: str
+    to_name: str = ""
+
+
+class EmailScheduleRequest(BaseModel):
+    to_email: str
+    to_name: str = ""
+
+
+class AffiliateCreateRequest(BaseModel):
+    name: str
+    email: str = ""
+    commission_rate: float = 20.0
+    notes: str = ""
+
+
+class AffiliateUpdateRequest(BaseModel):
+    name: str | None = None
+    email: str | None = None
+    commission_rate: float | None = None
+    notes: str | None = None
+    status: str | None = None
+
+
+class ReferralLinkRequest(BaseModel):
+    affiliate_id: int
+    product_id: int
+
+
+class ReferralConversionRequest(BaseModel):
+    ref_code: str
+    revenue: float
+
+
+class DMCARequest(BaseModel):
+    infringer_url: str = ""
+    infringer_name: str = ""
+
+
+class DMCAStatusRequest(BaseModel):
+    status: str
+
+
+class ScanResultRequest(BaseModel):
+    source: str = ""
+    found_url: str = ""
+    match_confidence: float = 0.0
+    notes: str = ""
+
+
+class TenantCreateRequest(BaseModel):
+    name: str
+    owner_email: str
+    brand_name: str = ""
+    brand_color: str = "#7c3aed"
+    tier: str = "free"
+    custom_domain: str = ""
+
+
+class TenantUpdateRequest(BaseModel):
+    name: str | None = None
+    owner_email: str | None = None
+    brand_name: str | None = None
+    brand_color: str | None = None
+    tier: str | None = None
+    custom_domain: str | None = None
+    status: str | None = None
 
 
 class PlatformSettingCreate(BaseModel):
@@ -1683,3 +1857,496 @@ async def suggest_faq(body: FAQSuggestRequest):
     if not result["success"]:
         raise HTTPException(status_code=500, detail=result["message"])
     return result
+
+
+# ══════════════════════════════════════════════════════════════════════
+# PRODUCT TEMPLATES (Feature 16)
+# ══════════════════════════════════════════════════════════════════════
+
+
+@app.get("/api/templates")
+async def list_templates():
+    """Get all product templates."""
+    templates = get_all_templates()
+    return {"templates": templates, "count": len(templates)}
+
+
+@app.post("/api/templates", status_code=201)
+async def create_new_template(body: TemplateCreateRequest):
+    """Create a reusable product template."""
+    result = create_template(
+        name=body.name,
+        product_type=body.product_type,
+        tone=body.tone,
+        keywords=body.keywords,
+        price_min=body.price_min,
+        price_max=body.price_max,
+        platforms=body.platforms,
+        languages=body.languages,
+        brief_template=body.brief_template,
+        seasonal_tag=body.seasonal_tag,
+        auto_activate_month=body.auto_activate_month,
+    )
+    return result
+
+
+@app.get("/api/templates/{template_id}")
+async def get_single_template(template_id: int):
+    """Get a single template."""
+    result = get_template(template_id)
+    if not result:
+        raise HTTPException(status_code=404, detail="Template not found")
+    return result
+
+
+@app.patch("/api/templates/{template_id}")
+async def update_existing_template(template_id: int, body: TemplateUpdateRequest):
+    """Update a product template."""
+    result = update_template(template_id, **body.model_dump(exclude_none=True))
+    if not result:
+        raise HTTPException(status_code=404, detail="Template not found")
+    return result
+
+
+@app.delete("/api/templates/{template_id}")
+async def delete_existing_template(template_id: int):
+    """Delete a product template."""
+    success = delete_template(template_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Template not found")
+    return {"message": "Template deleted", "id": template_id}
+
+
+@app.post("/api/templates/{template_id}/create-product")
+async def create_product_from_tmpl(template_id: int, body: TemplateProductRequest):
+    """Create a new product from a template."""
+    result = create_product_from_template(template_id, body.product_name)
+    if not result.get("success"):
+        raise HTTPException(status_code=404, detail=result.get("message", "Failed"))
+    return result
+
+
+# ══════════════════════════════════════════════════════════════════════
+# PRODUCT BUNDLES (Feature 16)
+# ══════════════════════════════════════════════════════════════════════
+
+
+@app.get("/api/bundles")
+async def list_bundles():
+    """Get all product bundles."""
+    bundles = get_all_bundles()
+    return {"bundles": bundles, "count": len(bundles)}
+
+
+@app.post("/api/bundles", status_code=201)
+async def create_new_bundle(body: BundleCreateRequest):
+    """Create a product bundle."""
+    result = create_bundle(
+        name=body.name,
+        product_ids=body.product_ids,
+        discount_percent=body.discount_percent,
+        seasonal_tag=body.seasonal_tag,
+        auto_activate_month=body.auto_activate_month,
+    )
+    if not result.get("success"):
+        raise HTTPException(status_code=400, detail=result.get("message", "Failed"))
+    return result
+
+
+@app.get("/api/bundles/{bundle_id}")
+async def get_single_bundle(bundle_id: int):
+    """Get a single bundle with items."""
+    result = get_bundle(bundle_id)
+    if not result:
+        raise HTTPException(status_code=404, detail="Bundle not found")
+    return result
+
+
+@app.delete("/api/bundles/{bundle_id}")
+async def delete_existing_bundle(bundle_id: int):
+    """Delete a bundle."""
+    success = delete_bundle(bundle_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Bundle not found")
+    return {"message": "Bundle deleted", "id": bundle_id}
+
+
+@app.post("/api/bundles/{bundle_id}/generate-listing")
+async def generate_bundle_listing_endpoint(bundle_id: int):
+    """AI generates a title, description, and marketing copy for a bundle."""
+    result = await generate_bundle_listing(bundle_id)
+    if not result.get("success"):
+        raise HTTPException(status_code=400, detail=result.get("message", "Failed"))
+    return result
+
+
+# ══════════════════════════════════════════════════════════════════════
+# COMPETITOR SPY AGENT (Feature 8)
+# ══════════════════════════════════════════════════════════════════════
+
+
+@app.post("/api/competitors/scan")
+async def scan_competitors(body: CompetitorScanRequest):
+    """Run AI competitor analysis scan."""
+    result = await run_competitor_scan(niches=body.niches)
+    if not result.get("success"):
+        raise HTTPException(status_code=500, detail=result.get("message", "Scan failed"))
+    return result
+
+
+@app.get("/api/competitors")
+async def list_competitors(
+    platform: str | None = Query(None, description="Filter by platform"),
+):
+    """Get all tracked competitors."""
+    competitors = get_competitors(platform=platform)
+    return {"competitors": competitors, "count": len(competitors)}
+
+
+@app.get("/api/competitors/alerts")
+async def list_competitor_alerts(
+    alert_type: str | None = Query(None, description="Filter: price_change, market_gap"),
+):
+    """Get active competitor alerts."""
+    alerts = get_competitor_alerts(alert_type=alert_type)
+    return {"alerts": alerts, "count": len(alerts)}
+
+
+@app.post("/api/competitors/alerts/{alert_id}/dismiss")
+async def dismiss_competitor_alert(alert_id: int):
+    """Dismiss a competitor alert."""
+    success = dismiss_alert(alert_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Alert not found")
+    return {"message": "Alert dismissed", "id": alert_id}
+
+
+# ══════════════════════════════════════════════════════════════════════
+# CROSS-PLATFORM ARBITRAGE (Feature 13)
+# ══════════════════════════════════════════════════════════════════════
+
+
+@app.get("/api/arbitrage")
+async def get_arbitrage_opportunities():
+    """Analyze cross-platform pricing and performance differences."""
+    result = await analyze_arbitrage()
+    return result
+
+
+# ══════════════════════════════════════════════════════════════════════
+# UPSELL & CROSS-SELL ENGINE (Feature 21)
+# ══════════════════════════════════════════════════════════════════════
+
+
+@app.get("/api/products/{product_id}/recommendations")
+async def product_recommendations(
+    product_id: int,
+    limit: int = Query(5, description="Max recommendations"),
+):
+    """Get AI-powered product recommendations for upsell/cross-sell."""
+    result = await get_recommendations(product_id, limit=limit)
+    if not result.get("success"):
+        raise HTTPException(status_code=400, detail=result.get("message", "Failed"))
+    return result
+
+
+@app.get("/api/products/{product_id}/frequently-bought")
+async def product_frequently_bought(product_id: int):
+    """Get products frequently bought together."""
+    related = get_frequently_bought_together(product_id)
+    return {"related_products": related, "count": len(related)}
+
+
+# ══════════════════════════════════════════════════════════════════════
+# EMAIL MARKETING - BREVO INTEGRATION (Feature 20 Enhancement)
+# ══════════════════════════════════════════════════════════════════════
+
+
+@app.get("/api/email/status")
+async def email_integration_status():
+    """Get Brevo email integration status."""
+    return get_brevo_status()
+
+
+@app.post("/api/email/campaigns/{campaign_id}/send")
+async def send_campaign(campaign_id: int, body: EmailSendRequest):
+    """Send a specific email from a campaign via Brevo."""
+    result = await send_campaign_email(
+        campaign_id=campaign_id,
+        email_type=body.email_type,
+        to_email=body.to_email,
+        to_name=body.to_name,
+    )
+    if not result.get("success"):
+        raise HTTPException(status_code=400, detail=result.get("message", "Failed"))
+    return result
+
+
+@app.post("/api/email/campaigns/{campaign_id}/schedule")
+async def schedule_campaign(campaign_id: int, body: EmailScheduleRequest):
+    """Schedule the full email sequence (promo, Day 3, Day 7)."""
+    result = await schedule_campaign_sequence(
+        campaign_id=campaign_id,
+        to_email=body.to_email,
+        to_name=body.to_name,
+    )
+    if not result.get("success"):
+        raise HTTPException(status_code=400, detail=result.get("message", "Failed"))
+    return result
+
+
+# ══════════════════════════════════════════════════════════════════════
+# AI CUSTOMER PERSONAS (Feature 9 Enhancement)
+# ══════════════════════════════════════════════════════════════════════
+
+
+@app.post("/api/personas/generate")
+async def generate_ai_personas(
+    count: int = Query(3, description="Number of personas to generate"),
+):
+    """AI generates customer personas from sales data analysis."""
+    result = await generate_personas_from_data(count=count)
+    if not result.get("success"):
+        raise HTTPException(status_code=500, detail=result.get("message", "Failed"))
+    return result
+
+
+# ══════════════════════════════════════════════════════════════════════
+# AFFILIATE & REFERRAL SYSTEM (Feature 23)
+# ══════════════════════════════════════════════════════════════════════
+
+
+@app.get("/api/affiliates")
+async def list_affiliates(
+    status: str | None = Query(None, description="Filter by status: active, inactive"),
+):
+    """Get all affiliates with stats."""
+    affiliates = get_all_affiliates(status=status)
+    return {"affiliates": affiliates, "count": len(affiliates)}
+
+
+@app.post("/api/affiliates", status_code=201)
+async def create_new_affiliate(body: AffiliateCreateRequest):
+    """Register a new affiliate partner."""
+    result = create_affiliate(
+        name=body.name,
+        email=body.email,
+        commission_rate=body.commission_rate,
+        notes=body.notes,
+    )
+    return result
+
+
+@app.patch("/api/affiliates/{affiliate_id}")
+async def update_existing_affiliate(affiliate_id: int, body: AffiliateUpdateRequest):
+    """Update an affiliate."""
+    result = update_affiliate(affiliate_id, **body.model_dump(exclude_none=True))
+    if not result:
+        raise HTTPException(status_code=404, detail="Affiliate not found")
+    return result
+
+
+@app.delete("/api/affiliates/{affiliate_id}")
+async def delete_existing_affiliate(affiliate_id: int):
+    """Delete an affiliate."""
+    success = delete_affiliate(affiliate_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Affiliate not found")
+    return {"message": "Affiliate deleted", "id": affiliate_id}
+
+
+@app.post("/api/affiliates/referral-link")
+async def create_referral_link(body: ReferralLinkRequest):
+    """Generate a referral link for an affiliate + product."""
+    result = generate_referral_link(body.affiliate_id, body.product_id)
+    if not result.get("success"):
+        raise HTTPException(status_code=400, detail=result.get("message", "Failed"))
+    return result
+
+
+@app.get("/api/affiliates/referral-links")
+async def list_referral_links(
+    affiliate_id: int | None = Query(None),
+    product_id: int | None = Query(None),
+):
+    """Get referral links with optional filters."""
+    links = get_referral_links(affiliate_id=affiliate_id, product_id=product_id)
+    return {"links": links, "count": len(links)}
+
+
+@app.post("/api/affiliates/track-click")
+async def track_click(ref_code: str = Query(..., description="Referral code")):
+    """Track a click on a referral link."""
+    result = track_referral_click(ref_code)
+    if not result.get("success"):
+        raise HTTPException(status_code=400, detail=result.get("message", "Failed"))
+    return result
+
+
+@app.post("/api/affiliates/track-conversion")
+async def track_conversion(body: ReferralConversionRequest):
+    """Track a conversion (sale) from a referral."""
+    result = track_referral_conversion(body.ref_code, body.revenue)
+    if not result.get("success"):
+        raise HTTPException(status_code=400, detail=result.get("message", "Failed"))
+    return result
+
+
+@app.get("/api/affiliates/stats")
+async def affiliate_stats(
+    affiliate_id: int | None = Query(None),
+):
+    """Get referral statistics."""
+    stats = get_referral_stats(affiliate_id=affiliate_id)
+    return stats
+
+
+@app.post("/api/affiliates/marketing-kit/{product_id}")
+async def generate_marketing_kit(product_id: int):
+    """AI generates a complete affiliate marketing kit for a product."""
+    result = await generate_affiliate_kit(product_id)
+    if not result.get("success"):
+        raise HTTPException(status_code=400, detail=result.get("message", "Failed"))
+    return result
+
+
+# ══════════════════════════════════════════════════════════════════════
+# PIRACY PROTECTION (Feature 24)
+# ══════════════════════════════════════════════════════════════════════
+
+
+@app.post("/api/products/{product_id}/watermark")
+async def create_watermark(product_id: int):
+    """Generate a unique watermark ID for a product."""
+    result = generate_watermark_id(product_id)
+    if not result.get("success"):
+        raise HTTPException(status_code=400, detail=result.get("message", "Failed"))
+    return result
+
+
+@app.get("/api/piracy/status")
+async def piracy_status(
+    product_id: int | None = Query(None, description="Filter by product ID"),
+):
+    """Get piracy protection status for products."""
+    result = get_protection_status(product_id=product_id)
+    return {"protections": result if isinstance(result, list) else [result], "count": 1 if isinstance(result, dict) else len(result)}
+
+
+@app.post("/api/piracy/{product_id}/scan")
+async def record_piracy_scan(product_id: int, body: ScanResultRequest):
+    """Record a piracy scan result."""
+    result = record_scan_result(product_id, body.model_dump())
+    if not result.get("success"):
+        raise HTTPException(status_code=400, detail=result.get("message", "Failed"))
+    return result
+
+
+@app.post("/api/piracy/{product_id}/dmca")
+async def create_dmca(product_id: int, body: DMCARequest):
+    """AI generates a DMCA takedown template."""
+    result = await generate_dmca_template(
+        product_id=product_id,
+        infringer_url=body.infringer_url,
+        infringer_name=body.infringer_name,
+    )
+    if not result.get("success"):
+        raise HTTPException(status_code=400, detail=result.get("message", "Failed"))
+    return result
+
+
+@app.get("/api/piracy/dmca")
+async def list_dmca_requests(
+    product_id: int | None = Query(None),
+):
+    """Get all DMCA requests."""
+    requests = get_dmca_requests(product_id=product_id)
+    return {"requests": requests, "count": len(requests)}
+
+
+@app.patch("/api/piracy/dmca/{dmca_id}")
+async def update_dmca(dmca_id: int, body: DMCAStatusRequest):
+    """Update DMCA request status."""
+    result = update_dmca_status(dmca_id, body.status)
+    if not result:
+        raise HTTPException(status_code=404, detail="DMCA request not found or invalid status")
+    return result
+
+
+# ══════════════════════════════════════════════════════════════════════
+# WHITE-LABEL RESELL (Feature 26)
+# ══════════════════════════════════════════════════════════════════════
+
+
+@app.get("/api/white-label/tiers")
+async def list_tiers():
+    """Get available subscription tiers."""
+    tiers = get_tiers()
+    return {"tiers": tiers, "count": len(tiers)}
+
+
+@app.get("/api/white-label/tenants")
+async def list_tenants(
+    status: str | None = Query(None, description="Filter by status: active, suspended"),
+):
+    """Get all white-label tenants."""
+    tenants = get_all_tenants(status=status)
+    return {"tenants": tenants, "count": len(tenants)}
+
+
+@app.post("/api/white-label/tenants", status_code=201)
+async def create_new_tenant(body: TenantCreateRequest):
+    """Create a new white-label tenant."""
+    result = create_tenant(
+        name=body.name,
+        owner_email=body.owner_email,
+        brand_name=body.brand_name,
+        brand_color=body.brand_color,
+        tier=body.tier,
+        custom_domain=body.custom_domain,
+    )
+    if not result.get("success"):
+        raise HTTPException(status_code=400, detail=result.get("message", "Failed"))
+    return result
+
+
+@app.get("/api/white-label/tenants/{tenant_id}")
+async def get_single_tenant(tenant_id: int):
+    """Get a single tenant."""
+    result = get_tenant(tenant_id)
+    if not result:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    return result
+
+
+@app.patch("/api/white-label/tenants/{tenant_id}")
+async def update_existing_tenant(tenant_id: int, body: TenantUpdateRequest):
+    """Update a tenant."""
+    result = update_tenant(tenant_id, **body.model_dump(exclude_none=True))
+    if not result:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    return result
+
+
+@app.delete("/api/white-label/tenants/{tenant_id}")
+async def delete_existing_tenant(tenant_id: int):
+    """Delete a tenant."""
+    success = delete_tenant(tenant_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    return {"message": "Tenant deleted", "id": tenant_id}
+
+
+@app.get("/api/white-label/tenants/{tenant_id}/limits")
+async def tenant_limits(tenant_id: int):
+    """Check a tenant's usage against their tier limits."""
+    result = check_tenant_limits(tenant_id)
+    if not result.get("tenant_id") and not result.get("within_limits"):
+        raise HTTPException(status_code=404, detail=result.get("message", "Tenant not found"))
+    return result
+
+
+@app.get("/api/white-label/stats")
+async def white_label_stats():
+    """Get aggregate statistics across all tenants."""
+    return get_tenant_stats()

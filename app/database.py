@@ -236,6 +236,155 @@ def init_db():
             created_at TEXT DEFAULT (datetime('now')),
             updated_at TEXT DEFAULT (datetime('now'))
         );
+
+        -- Feature 16: Product Templates & Bundles
+        CREATE TABLE IF NOT EXISTS product_templates (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            product_type TEXT DEFAULT 'digital',
+            tone TEXT DEFAULT '',
+            keywords TEXT DEFAULT '[]',
+            price_min REAL DEFAULT 5.0,
+            price_max REAL DEFAULT 15.0,
+            platforms TEXT DEFAULT '[]',
+            languages TEXT DEFAULT '["en"]',
+            brief_template TEXT DEFAULT '',
+            seasonal_tag TEXT DEFAULT '',
+            auto_activate_month INTEGER,
+            times_used INTEGER DEFAULT 0,
+            created_at TEXT DEFAULT (datetime('now')),
+            updated_at TEXT DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS product_bundles (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            discount_percent REAL DEFAULT 25.0,
+            individual_total REAL DEFAULT 0,
+            bundle_price REAL DEFAULT 0,
+            seasonal_tag TEXT DEFAULT '',
+            auto_activate_month INTEGER,
+            listing_data TEXT DEFAULT '{}',
+            status TEXT DEFAULT 'active',
+            created_at TEXT DEFAULT (datetime('now')),
+            updated_at TEXT DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS bundle_items (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            bundle_id INTEGER NOT NULL,
+            product_id INTEGER NOT NULL,
+            position INTEGER DEFAULT 0,
+            individual_price REAL DEFAULT 0,
+            FOREIGN KEY (bundle_id) REFERENCES product_bundles(id),
+            FOREIGN KEY (product_id) REFERENCES products(id)
+        );
+
+        -- Feature 8: Competitor Spy Agent
+        CREATE TABLE IF NOT EXISTS competitor_tracking (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            seller_name TEXT NOT NULL,
+            platform TEXT DEFAULT '',
+            top_products TEXT DEFAULT '[]',
+            price_range TEXT DEFAULT '',
+            strengths TEXT DEFAULT '',
+            weaknesses TEXT DEFAULT '',
+            threat_level TEXT DEFAULT 'medium',
+            created_at TEXT DEFAULT (datetime('now')),
+            updated_at TEXT DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS competitor_alerts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            alert_type TEXT DEFAULT 'price_change',
+            product_type TEXT DEFAULT '',
+            details TEXT DEFAULT '{}',
+            platform TEXT DEFAULT '',
+            recommendation TEXT DEFAULT '',
+            status TEXT DEFAULT 'active',
+            created_at TEXT DEFAULT (datetime('now'))
+        );
+
+        -- Feature 23: Affiliate & Referral System
+        CREATE TABLE IF NOT EXISTS affiliates (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            email TEXT DEFAULT '',
+            affiliate_code TEXT NOT NULL UNIQUE,
+            commission_rate REAL DEFAULT 20.0,
+            total_earned REAL DEFAULT 0,
+            notes TEXT DEFAULT '',
+            status TEXT DEFAULT 'active',
+            created_at TEXT DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS referral_links (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            affiliate_id INTEGER NOT NULL,
+            product_id INTEGER NOT NULL,
+            ref_code TEXT NOT NULL UNIQUE,
+            clicks INTEGER DEFAULT 0,
+            conversions INTEGER DEFAULT 0,
+            created_at TEXT DEFAULT (datetime('now')),
+            FOREIGN KEY (affiliate_id) REFERENCES affiliates(id),
+            FOREIGN KEY (product_id) REFERENCES products(id)
+        );
+
+        CREATE TABLE IF NOT EXISTS referral_tracking (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            affiliate_id INTEGER NOT NULL,
+            product_id INTEGER NOT NULL,
+            ref_code TEXT DEFAULT '',
+            status TEXT DEFAULT 'clicked',
+            sale_amount REAL DEFAULT 0,
+            commission_amount REAL DEFAULT 0,
+            created_at TEXT DEFAULT (datetime('now')),
+            FOREIGN KEY (affiliate_id) REFERENCES affiliates(id),
+            FOREIGN KEY (product_id) REFERENCES products(id)
+        );
+
+        -- Feature 24: Piracy Protection
+        CREATE TABLE IF NOT EXISTS piracy_protection (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            product_id INTEGER NOT NULL UNIQUE,
+            watermark_id TEXT DEFAULT '',
+            fingerprint TEXT DEFAULT '',
+            status TEXT DEFAULT 'active',
+            scan_count INTEGER DEFAULT 0,
+            scan_results TEXT DEFAULT '[]',
+            last_scan TEXT,
+            created_at TEXT DEFAULT (datetime('now')),
+            updated_at TEXT DEFAULT (datetime('now')),
+            FOREIGN KEY (product_id) REFERENCES products(id)
+        );
+
+        CREATE TABLE IF NOT EXISTS dmca_requests (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            product_id INTEGER NOT NULL,
+            infringer_url TEXT DEFAULT '',
+            infringer_name TEXT DEFAULT '',
+            dmca_data TEXT DEFAULT '{}',
+            status TEXT DEFAULT 'draft',
+            created_at TEXT DEFAULT (datetime('now')),
+            updated_at TEXT DEFAULT (datetime('now')),
+            FOREIGN KEY (product_id) REFERENCES products(id)
+        );
+
+        -- Feature 26: White-Label Resell
+        CREATE TABLE IF NOT EXISTS white_label_tenants (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            slug TEXT NOT NULL UNIQUE,
+            owner_email TEXT DEFAULT '',
+            brand_name TEXT DEFAULT '',
+            brand_color TEXT DEFAULT '#7c3aed',
+            tier TEXT DEFAULT 'free',
+            api_key TEXT NOT NULL UNIQUE,
+            custom_domain TEXT DEFAULT '',
+            status TEXT DEFAULT 'active',
+            created_at TEXT DEFAULT (datetime('now')),
+            updated_at TEXT DEFAULT (datetime('now'))
+        );
     """)
 
     conn.commit()

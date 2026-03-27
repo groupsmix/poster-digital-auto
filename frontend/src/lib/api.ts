@@ -12,6 +12,11 @@ import type {
   RepurposedContent, RepurposeResult, VoiceOverResult,
   FAQEntry, FAQSuggestion,
   PlatformSetting, CustomerPersona, APIKeyStatus, SettingsPreferences,
+  ProductTemplate, ProductBundle,
+  Competitor, CompetitorAlert,
+  Affiliate, ReferralLink,
+  PiracyProtection, DMCARequest,
+  WhiteLabelTenant, WhiteLabelTier,
 } from "./types";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
@@ -483,4 +488,318 @@ export async function updatePreference(key: string, value: unknown): Promise<{ k
 // Settings - API Key Status
 export async function fetchAPIKeyStatus(): Promise<{ api_keys: APIKeyStatus[]; configured_count: number; total_count: number }> {
   return request("/api/settings/api-keys");
+}
+
+// Product Templates
+export async function fetchTemplates(): Promise<{ templates: ProductTemplate[]; count: number }> {
+  return request("/api/templates");
+}
+
+export async function createTemplate(data: {
+  name: string;
+  product_type?: string;
+  tone?: string;
+  keywords?: string[];
+  price_min?: number;
+  price_max?: number;
+  platforms?: string[];
+  languages?: string[];
+  brief_template?: string;
+  seasonal_tag?: string;
+  auto_activate_month?: number | null;
+}): Promise<ProductTemplate> {
+  return request<ProductTemplate>("/api/templates", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateTemplate(id: number, data: Partial<{
+  name: string;
+  product_type: string;
+  tone: string;
+  keywords: string[];
+  price_min: number;
+  price_max: number;
+  platforms: string[];
+  languages: string[];
+  brief_template: string;
+  seasonal_tag: string;
+  auto_activate_month: number | null;
+}>): Promise<ProductTemplate> {
+  return request<ProductTemplate>(`/api/templates/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteTemplate(id: number): Promise<{ message: string }> {
+  return request(`/api/templates/${id}`, { method: "DELETE" });
+}
+
+export async function createProductFromTemplate(templateId: number, productName: string): Promise<{ success: boolean; product_id: number; message: string }> {
+  return request(`/api/templates/${templateId}/create-product`, {
+    method: "POST",
+    body: JSON.stringify({ product_name: productName }),
+  });
+}
+
+// Product Bundles
+export async function fetchBundles(): Promise<{ bundles: ProductBundle[]; count: number }> {
+  return request("/api/bundles");
+}
+
+export async function createBundle(data: {
+  name: string;
+  product_ids: number[];
+  discount_percent?: number;
+  seasonal_tag?: string;
+  auto_activate_month?: number | null;
+}): Promise<{ success: boolean; bundle: ProductBundle; message: string }> {
+  return request("/api/bundles", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteBundle(id: number): Promise<{ message: string }> {
+  return request(`/api/bundles/${id}`, { method: "DELETE" });
+}
+
+export async function generateBundleListing(bundleId: number): Promise<{ success: boolean; listing: Record<string, unknown>; message: string }> {
+  return request(`/api/bundles/${bundleId}/generate-listing`, { method: "POST" });
+}
+
+// Competitor Spy
+export async function scanCompetitors(niches?: string): Promise<{ success: boolean; competitors: Competitor[]; alerts: CompetitorAlert[]; message: string }> {
+  return request("/api/competitors/scan", {
+    method: "POST",
+    body: JSON.stringify({ niches: niches || "" }),
+  });
+}
+
+export async function fetchCompetitors(platform?: string): Promise<{ competitors: Competitor[]; count: number }> {
+  const query = platform ? `?platform=${encodeURIComponent(platform)}` : "";
+  return request(`/api/competitors${query}`);
+}
+
+export async function fetchCompetitorAlerts(alertType?: string): Promise<{ alerts: CompetitorAlert[]; count: number }> {
+  const query = alertType ? `?alert_type=${encodeURIComponent(alertType)}` : "";
+  return request(`/api/competitors/alerts${query}`);
+}
+
+export async function dismissCompetitorAlert(alertId: number): Promise<{ message: string }> {
+  return request(`/api/competitors/alerts/${alertId}/dismiss`, { method: "POST" });
+}
+
+// Cross-Platform Arbitrage
+export async function fetchArbitrage(): Promise<Record<string, unknown>> {
+  return request("/api/arbitrage");
+}
+
+// Upsell & Cross-sell
+export async function fetchRecommendations(productId: number, limit?: number): Promise<Record<string, unknown>> {
+  const query = limit ? `?limit=${limit}` : "";
+  return request(`/api/products/${productId}/recommendations${query}`);
+}
+
+export async function fetchFrequentlyBought(productId: number): Promise<{ related_products: Record<string, unknown>[]; count: number }> {
+  return request(`/api/products/${productId}/frequently-bought`);
+}
+
+// Email - Brevo Integration
+export async function fetchBrevoStatus(): Promise<Record<string, unknown>> {
+  return request("/api/email/status");
+}
+
+export async function sendCampaignEmail(campaignId: number, data: {
+  email_type: string;
+  to_email: string;
+  to_name?: string;
+}): Promise<{ success: boolean; message: string }> {
+  return request(`/api/email/campaigns/${campaignId}/send`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function scheduleCampaignSequence(campaignId: number, data: {
+  to_email: string;
+  to_name?: string;
+}): Promise<{ success: boolean; message: string }> {
+  return request(`/api/email/campaigns/${campaignId}/schedule`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+// AI Personas
+export async function generateAIPersonas(count?: number): Promise<{ success: boolean; personas: CustomerPersona[]; message: string }> {
+  const query = count ? `?count=${count}` : "";
+  return request(`/api/personas/generate${query}`, { method: "POST" });
+}
+
+// Affiliate & Referral System
+export async function fetchAffiliates(status?: string): Promise<{ affiliates: Affiliate[]; count: number }> {
+  const query = status ? `?status=${encodeURIComponent(status)}` : "";
+  return request(`/api/affiliates${query}`);
+}
+
+export async function createAffiliate(data: {
+  name: string;
+  email?: string;
+  commission_rate?: number;
+  notes?: string;
+}): Promise<Affiliate> {
+  return request<Affiliate>("/api/affiliates", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateAffiliate(id: number, data: Partial<{
+  name: string;
+  email: string;
+  commission_rate: number;
+  notes: string;
+  status: string;
+}>): Promise<Affiliate> {
+  return request<Affiliate>(`/api/affiliates/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteAffiliate(id: number): Promise<{ message: string }> {
+  return request(`/api/affiliates/${id}`, { method: "DELETE" });
+}
+
+export async function createReferralLink(affiliateId: number, productId: number): Promise<{ success: boolean; link: ReferralLink; message: string }> {
+  return request("/api/affiliates/referral-link", {
+    method: "POST",
+    body: JSON.stringify({ affiliate_id: affiliateId, product_id: productId }),
+  });
+}
+
+export async function fetchReferralLinks(affiliateId?: number, productId?: number): Promise<{ links: ReferralLink[]; count: number }> {
+  const params = new URLSearchParams();
+  if (affiliateId) params.set("affiliate_id", String(affiliateId));
+  if (productId) params.set("product_id", String(productId));
+  const query = params.toString() ? `?${params}` : "";
+  return request(`/api/affiliates/referral-links${query}`);
+}
+
+export async function trackReferralClick(refCode: string): Promise<{ success: boolean; message: string }> {
+  return request(`/api/affiliates/track-click?ref_code=${encodeURIComponent(refCode)}`, { method: "POST" });
+}
+
+export async function trackReferralConversion(refCode: string, revenue: number): Promise<{ success: boolean; message: string }> {
+  return request("/api/affiliates/track-conversion", {
+    method: "POST",
+    body: JSON.stringify({ ref_code: refCode, revenue }),
+  });
+}
+
+export async function fetchReferralStats(affiliateId?: number): Promise<Record<string, unknown>> {
+  const query = affiliateId ? `?affiliate_id=${affiliateId}` : "";
+  return request(`/api/affiliates/stats${query}`);
+}
+
+export async function generateMarketingKit(productId: number): Promise<{ success: boolean; kit: Record<string, unknown>; message: string }> {
+  return request(`/api/affiliates/marketing-kit/${productId}`, { method: "POST" });
+}
+
+// Piracy Protection
+export async function createWatermark(productId: number): Promise<{ success: boolean; watermark_id: string; message: string }> {
+  return request(`/api/products/${productId}/watermark`, { method: "POST" });
+}
+
+export async function fetchPiracyStatus(productId?: number): Promise<{ protections: PiracyProtection[]; count: number }> {
+  const query = productId ? `?product_id=${productId}` : "";
+  return request(`/api/piracy/status${query}`);
+}
+
+export async function recordPiracyScan(productId: number, data: {
+  source?: string;
+  found_url?: string;
+  match_confidence?: number;
+  notes?: string;
+}): Promise<{ success: boolean; message: string }> {
+  return request(`/api/piracy/${productId}/scan`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function generateDMCA(productId: number, data: {
+  infringer_url?: string;
+  infringer_name?: string;
+}): Promise<{ success: boolean; dmca: DMCARequest; message: string }> {
+  return request(`/api/piracy/${productId}/dmca`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function fetchDMCARequests(productId?: number): Promise<{ requests: DMCARequest[]; count: number }> {
+  const query = productId ? `?product_id=${productId}` : "";
+  return request(`/api/piracy/dmca${query}`);
+}
+
+export async function updateDMCAStatus(dmcaId: number, status: string): Promise<DMCARequest> {
+  return request<DMCARequest>(`/api/piracy/dmca/${dmcaId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ status }),
+  });
+}
+
+// White-Label Resell
+export async function fetchWhiteLabelTiers(): Promise<{ tiers: WhiteLabelTier[]; count: number }> {
+  return request("/api/white-label/tiers");
+}
+
+export async function fetchTenants(status?: string): Promise<{ tenants: WhiteLabelTenant[]; count: number }> {
+  const query = status ? `?status=${encodeURIComponent(status)}` : "";
+  return request(`/api/white-label/tenants${query}`);
+}
+
+export async function createTenant(data: {
+  name: string;
+  owner_email: string;
+  brand_name?: string;
+  brand_color?: string;
+  tier?: string;
+  custom_domain?: string;
+}): Promise<{ success: boolean; tenant: WhiteLabelTenant; message: string }> {
+  return request("/api/white-label/tenants", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateTenant(id: number, data: Partial<{
+  name: string;
+  owner_email: string;
+  brand_name: string;
+  brand_color: string;
+  tier: string;
+  custom_domain: string;
+  status: string;
+}>): Promise<WhiteLabelTenant> {
+  return request<WhiteLabelTenant>(`/api/white-label/tenants/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteTenant(id: number): Promise<{ message: string }> {
+  return request(`/api/white-label/tenants/${id}`, { method: "DELETE" });
+}
+
+export async function fetchTenantLimits(tenantId: number): Promise<Record<string, unknown>> {
+  return request(`/api/white-label/tenants/${tenantId}/limits`);
+}
+
+export async function fetchWhiteLabelStats(): Promise<Record<string, unknown>> {
+  return request("/api/white-label/stats");
 }
