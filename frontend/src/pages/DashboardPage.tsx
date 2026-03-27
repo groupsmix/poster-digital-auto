@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Package, Clock, CheckCircle, Send, AlertTriangle, PlusCircle, Cpu, ArrowRight } from "lucide-react";
-import { fetchStats, fetchProducts } from "@/lib/api";
-import type { Stats, Product } from "@/lib/types";
+import { Package, Clock, CheckCircle, Send, AlertTriangle, PlusCircle, Cpu, ArrowRight, TrendingUp, Zap } from "lucide-react";
+import { fetchStats, fetchProducts, fetchTrendAlerts } from "@/lib/api";
+import type { Stats, Product, TrendPrediction } from "@/lib/types";
 import StatusBadge from "@/components/StatusBadge";
 import Spinner from "@/components/Spinner";
 
@@ -25,13 +25,15 @@ function StatCard({ label, value, icon: Icon, color }: { label: string; value: n
 export default function DashboardPage() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [recent, setRecent] = useState<Product[]>([]);
+  const [trendAlerts, setTrendAlerts] = useState<TrendPrediction[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all([fetchStats(), fetchProducts()])
-      .then(([s, p]) => {
+    Promise.all([fetchStats(), fetchProducts(), fetchTrendAlerts()])
+      .then(([s, p, t]) => {
         setStats(s);
         setRecent(p.products.slice(0, 10));
+        setTrendAlerts(t.alerts || []);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -53,6 +55,33 @@ export default function DashboardPage() {
         <h1 className="text-2xl font-bold">Dashboard</h1>
         <p className="mt-1 text-zinc-400">Overview of your AI Product Factory</p>
       </div>
+
+      {/* Trend Alerts Banner */}
+      {trendAlerts.length > 0 && (
+        <div className="space-y-2">
+          {trendAlerts.map((alert) => (
+            <Link
+              key={alert.id}
+              to="/trends"
+              className="flex items-center gap-3 rounded-xl border border-cyan-500/30 bg-cyan-500/10 p-4 transition-colors hover:bg-cyan-500/15"
+            >
+              <div className="rounded-lg bg-cyan-500/20 p-2">
+                <Zap className="h-5 w-5 text-cyan-400" />
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-medium text-cyan-300">
+                  Trend Alert: {alert.trend_name} will peak{" "}
+                  {alert.time_remaining ? `in ${alert.time_remaining}` : "soon"}
+                </p>
+                <p className="mt-0.5 text-xs text-zinc-400">
+                  {alert.action} • {alert.confidence}% confidence
+                </p>
+              </div>
+              <TrendingUp className="h-5 w-5 text-cyan-400" />
+            </Link>
+          ))}
+        </div>
+      )}
 
       {/* Stat cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
