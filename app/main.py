@@ -10,7 +10,7 @@ from datetime import datetime
 from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
@@ -22,6 +22,18 @@ from app.ai_failover import (
     get_all_provider_statuses,
     load_provider_statuses_from_db,
     reset_all_daily_limits,
+)
+from app.analytics import (
+    generate_insights,
+    get_ai_provider_usage,
+    get_ceo_score_trend,
+    get_overview,
+    get_platform_performance,
+    get_product_analytics,
+    get_revenue_over_time,
+    get_top_products,
+    import_sales_csv,
+    record_event,
 )
 from app.database import get_db, init_db, seed_ai_status, seed_platform_settings
 
@@ -92,6 +104,22 @@ class VariantUpdate(BaseModel):
 class SocialPostUpdate(BaseModel):
     caption: str | None = None
     post_status: str | None = None
+
+
+class AnalyticsEventRequest(BaseModel):
+    product_id: int | None = None
+    variant_id: int | None = None
+    platform: str
+    event_type: str
+    revenue: float = 0.0
+    data: dict | None = None
+
+
+class ManualSaleRequest(BaseModel):
+    product_id: int
+    platform: str
+    revenue: float
+    date: str | None = None
 
 
 # ── Helper Functions ──────────────────────────────────────────────────
@@ -667,3 +695,108 @@ async def update_platform_setting(platform_id: int, body: dict):
         ).fetchone()
 
     return row_to_dict(row)
+
+
+# ══════════════════════════════════════════════════════════════════════
+# ANALYTICS
+# ══════════════════════════════════════════════════════════════════════
+
+@app.post("/api/analytics/event")
+async def create_analytics_event(body: AnalyticsEventRequest):
+    """Record an analytics event (view, click, sale, refund)."""
+    valid_types = {"view", "click", "sale", "refund"}
+    if body.event_type not in valid_types:
+        raise HTTPException(status_code=400, detail=f"event_type must be one of: {', '.join(valid_types)}")
+    result = record_event(
+        product_id=body.product_id,
+        variant_id=body.variant_id,
+        platform=body.platform,
+        event_type=body.event_type,
+        revenue=body.revenue,
+        data=body.data,
+    )
+    return result
+
+
+@app.get("/api/analytics/overview")
+async def analytics_overview():
+    """Dashboard summary: total revenue, products, best platform, avg CEO score."""
+    return get_overview()
+
+
+@app.get("/api/analytics/revenue")
+async def analytics_revenue(
+    period: str = Query("30d", description="Period: 7d, 30d, 90d, all"),
+):
+    """Revenue over time for charting."""
+    return get_revenue_over_time(period)
+
+
+@app.get("/api/analytics/platforms")
+async def analytics_platforms():
+    """Per-platform performance comparison."""
+    return get_platform_performance()
+
+
+@app.get("/api/analytics/products/{product_id}")
+async def analytics_product(product_id: int):
+    """Single product deep-dive analytics."""
+    result = get_product_analytics(product_id)
+    if "error" in result:
+        raise HTTPException(status_code=404, detail=result["error"])
+    return result
+
+
+@app.get("/api/analytics/top-products")
+async def analytics_top_products(
+    limit: int = Query(10, description="Max products to return"),
+):
+    """Top products sorted by revenue."""
+    return {"products": get_top_products(limit)}
+
+
+@app.get("/api/analytics/ceo-trend")
+async def analytics_ceo_trend():
+    """CEO approval rate trend over time."""
+    return {"trend": get_ceo_score_trend()}
+
+
+@app.get("/api/analytics/ai-usage")
+async def analytics_ai_usage():
+    """AI provider usage breakdown."""
+    return {"providers": get_ai_provider_usage()}
+
+
+@app.get("/api/analytics/insights")
+async def analytics_insights():
+    """AI-generated insights about product performance."""
+    return {"insights": generate_insights()}
+
+
+@app.post("/api/analytics/manual-sale")
+async def log_manual_sale(body: ManualSaleRequest):
+    """Manually log a sale (for Gumroad/Payhip without real-time APIs)."""
+    with get_db() as conn:
+        product = conn.execute("SELECT id FROM products WHERE id = ?", (body.product_id,)).fetchone()
+        if not product:
+            raise HTTPException(status_code=404, detail="Product not found")
+    result = record_event(
+        product_id=body.product_id,
+        variant_id=None,
+        platform=body.platform,
+        event_type="sale",
+        revenue=body.revenue,
+        data={"source": "manual", "date": body.date or datetime.utcnow().isoformat()},
+    )
+    return result
+
+
+@app.post("/api/analytics/import-csv")
+async def import_csv(file: UploadFile = File(...)):
+    """Import sales data from CSV file."""
+    if not file.filename or not file.filename.endswith(".csv"):
+        raise HTTPException(status_code=400, detail="File must be a CSV")
+    content = await file.read()
+    csv_text = content.decode("utf-8")
+    result = import_sales_csv(csv_text)
+    return result

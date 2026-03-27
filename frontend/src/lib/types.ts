@@ -107,3 +107,76 @@ export interface AutoPostConfig {
   tumblr: AutoPostPlatformConfig;
   pinterest: AutoPostPlatformConfig;
 }
+
+// Analytics types
+export interface AnalyticsOverview {
+  total_revenue: number;
+  total_refunds: number;
+  net_revenue: number;
+  products_created: number;
+  total_sales: number;
+  total_views: number;
+  total_clicks: number;
+  best_platform: string;
+  best_platform_revenue: number;
+  avg_ceo_score: number;
+  approval_rate: number;
+}
+
+export interface RevenueDataPoint {
+  date: string;
+  revenue: number;
+  sales: number;
+  refunds: number;
+  sale_count: number;
+  views: number;
+  clicks: number;
+}
+
+export interface PlatformPerformance {
+  platform: string;
+  revenue: number;
+  gross_revenue: number;
+  refunds: number;
+  sales: number;
+  views: number;
+  clicks: number;
+  conversion_rate: number;
+  posts: number;
+}
+
+export interface TopProduct {
+  product_id: number;
+  name: string;
+  status: string;
+  created_at: string;
+  revenue: number;
+  gross_revenue: number;
+  refunds: number;
+  sales: number;
+  views: number;
+}
+
+export interface CeoTrendPoint {
+  date: string;
+  avg_score: number;
+  approved: number;
+  rejected: number;
+  total: number;
+  approval_rate: number;
+}
+
+export interface AIProviderUsage {
+  provider: string;
+  usage_count: number;
+  success: number;
+  errors: number;
+  success_rate: number;
+}
+
+export interface Insight {
+  type: string;
+  icon: string;
+  message: string;
+  severity: "positive" | "negative" | "warning" | "info";
+}
