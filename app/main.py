@@ -20,6 +20,14 @@ from pydantic import BaseModel
 
 from app.agents.auto_poster import auto_post, get_auto_post_config
 from app.agents.caption_generator import generate_captions
+from app.agents.content_repurposer import get_repurposed_content, repurpose_product
+from app.agents.faq_bot import (
+    add_faq,
+    delete_faq,
+    get_all_faqs,
+    suggest_faq_answer,
+    update_faq,
+)
 from app.agents.niche_finder import (
     create_product_from_niche,
     get_all_niches,
@@ -34,6 +42,7 @@ from app.agents.trend_predictor import (
     get_all_trends,
     run_trend_scan,
 )
+from app.agents.voiceover import generate_voiceover
 from app.ab_testing import (
     create_ab_test,
     detect_winner,
@@ -83,6 +92,9 @@ load_dotenv()
 
 IMAGES_DIR = Path(__file__).parent / "images"
 IMAGES_DIR.mkdir(exist_ok=True)
+
+AUDIO_DIR = Path(__file__).parent / "audio"
+AUDIO_DIR.mkdir(exist_ok=True)
 
 
 # ── Lifespan ───────────────────────────────────────────────────────────
@@ -251,6 +263,22 @@ class LaunchPricingRequest(BaseModel):
 class BundlePricingRequest(BaseModel):
     prices: list[float]
     discount_percent: float = 25
+
+
+class FAQCreateRequest(BaseModel):
+    question: str
+    answer: str
+    category: str = "general"
+
+
+class FAQUpdateRequest(BaseModel):
+    question: str | None = None
+    answer: str | None = None
+    category: str | None = None
+
+
+class FAQSuggestRequest(BaseModel):
+    question: str
 
 
 # ── Helper Functions ──────────────────────────────────────────────────
@@ -1262,4 +1290,121 @@ async def list_goals():
 async def refresh_goals():
     """Recalculate progress for all active goals."""
     result = update_goal_progress()
+    return result
+
+
+# ══════════════════════════════════════════════════════════════════════
+# CONTENT REPURPOSING ENGINE
+# ══════════════════════════════════════════════════════════════════════
+
+
+@app.post("/api/products/{product_id}/repurpose")
+async def repurpose_product_content(product_id: int):
+    """Repurpose a product listing into 7 content formats.
+
+    Generates: blog post, YouTube script, Twitter thread,
+    Instagram carousel, newsletter, Quora answer, Pinterest pin.
+    """
+    with get_db() as conn:
+        product = conn.execute("SELECT id FROM products WHERE id = ?", (product_id,)).fetchone()
+        if not product:
+            raise HTTPException(status_code=404, detail="Product not found")
+
+    result = await repurpose_product(product_id)
+    if not result["success"]:
+        raise HTTPException(status_code=500, detail=result["message"])
+    return result
+
+
+@app.get("/api/products/{product_id}/repurpose")
+async def get_product_repurposed_content(product_id: int):
+    """Get all repurposed content for a product."""
+    with get_db() as conn:
+        product = conn.execute("SELECT id FROM products WHERE id = ?", (product_id,)).fetchone()
+        if not product:
+            raise HTTPException(status_code=404, detail="Product not found")
+
+    content = get_repurposed_content(product_id)
+    return {"content": content, "count": len(content)}
+
+
+# ══════════════════════════════════════════════════════════════════════
+# AI VOICE-OVER
+# ══════════════════════════════════════════════════════════════════════
+
+
+@app.post("/api/products/{product_id}/voiceover")
+async def product_voiceover(product_id: int):
+    """Generate a 30-second voice-over script and audio for a product.
+
+    AI writes the script, then TTS converts to audio (ElevenLabs or browser TTS fallback).
+    """
+    with get_db() as conn:
+        product = conn.execute("SELECT id FROM products WHERE id = ?", (product_id,)).fetchone()
+        if not product:
+            raise HTTPException(status_code=404, detail="Product not found")
+
+    result = await generate_voiceover(product_id)
+    if not result["success"]:
+        raise HTTPException(status_code=500, detail=result["message"])
+    return result
+
+
+@app.get("/api/audio/{filename}")
+async def serve_audio(filename: str):
+    """Serve a generated audio file."""
+    file_path = AUDIO_DIR / filename
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Audio file not found")
+    return FileResponse(file_path, media_type="audio/mpeg")
+
+
+# ══════════════════════════════════════════════════════════════════════
+# AUTO-REPLY FAQ BOT
+# ══════════════════════════════════════════════════════════════════════
+
+
+@app.post("/api/faq")
+async def create_faq(body: FAQCreateRequest):
+    """Add a new FAQ entry (question + answer)."""
+    result = add_faq(body.question, body.answer, body.category)
+    if not result["success"]:
+        raise HTTPException(status_code=400, detail=result["message"])
+    return result
+
+
+@app.get("/api/faq")
+async def list_faqs(
+    category: str | None = Query(None, description="Filter by category"),
+    search: str | None = Query(None, description="Search in question/answer text"),
+):
+    """List all FAQ entries with optional filters."""
+    faqs = get_all_faqs(category=category, search=search)
+    return {"faqs": faqs, "count": len(faqs)}
+
+
+@app.patch("/api/faq/{faq_id}")
+async def update_faq_entry(faq_id: int, body: FAQUpdateRequest):
+    """Update an existing FAQ entry."""
+    result = update_faq(faq_id, question=body.question, answer=body.answer, category=body.category)
+    if result is None:
+        raise HTTPException(status_code=404, detail="FAQ entry not found")
+    return result
+
+
+@app.delete("/api/faq/{faq_id}")
+async def delete_faq_entry(faq_id: int):
+    """Delete an FAQ entry."""
+    success = delete_faq(faq_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="FAQ entry not found")
+    return {"message": "FAQ entry deleted", "id": faq_id}
+
+
+@app.post("/api/faq/suggest")
+async def suggest_faq(body: FAQSuggestRequest):
+    """AI drafts an answer for a new question based on existing FAQ knowledge."""
+    result = await suggest_faq_answer(body.question)
+    if not result["success"]:
+        raise HTTPException(status_code=500, detail=result["message"])
     return result

@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { LayoutDashboard, PlusCircle, Package, Cpu, Share2, BarChart3, Calendar, Sparkles, TrendingUp, FlaskConical, Target } from "lucide-react";
+import { LayoutDashboard, PlusCircle, Package, Cpu, Share2, BarChart3, Calendar, Sparkles, TrendingUp, FlaskConical, Target, MessageCircle } from "lucide-react";
 
 const links = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -13,6 +13,7 @@ const links = [
   { to: "/goals", label: "Goals", icon: Target },
   { to: "/calendar", label: "Calendar", icon: Calendar },
   { to: "/ai-status", label: "AI Status", icon: Cpu },
+  { to: "/faq", label: "FAQ Bot", icon: MessageCircle },
 ];
 
 export default function Navbar() {
