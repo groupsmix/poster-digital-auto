@@ -1055,7 +1055,7 @@ export default function ProductDetailPage() {
     { key: "logs", label: "Pipeline Logs" },
   ];
 
-  const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:8000";
+  const apiUrl = import.meta.env.VITE_API_URL || "http://204.168.141.220";
 
   return (
     <div className="space-y-6">
