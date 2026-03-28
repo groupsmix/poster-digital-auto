@@ -1,0 +1,63 @@
+name: Deploy Backend to Hetzner
+
+on:
+  # Auto-deploy when pushing to main
+  push:
+    branches: [main]
+    paths:
+      - 'app/**'
+      - 'pyproject.toml'
+      - 'poetry.lock'
+      - 'deploy/**'
+
+  # Manual one-click deploy from GitHub Actions tab
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Deploy Backend
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy to Hetzner
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.HETZNER_HOST }}
+          username: ${{ secrets.HETZNER_USER }}
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          port: ${{ secrets.HETZNER_SSH_PORT != '' && secrets.HETZNER_SSH_PORT || '22' }}
+          script: |
+            set -e
+
+            APP_DIR="/opt/ai-product-factory"
+
+            echo "=== Deploying Backend ==="
+
+            # Pull latest code
+            cd "$APP_DIR"
+            git fetch origin main
+            git reset --hard origin/main
+
+            # Install dependencies
+            source .venv/bin/activate
+            pip install --upgrade pip --quiet
+            poetry install --no-interaction --quiet
+
+            # Copy updated systemd/nginx configs if changed
+            sudo cp deploy/systemd/ai-product-factory.service /etc/systemd/system/
+            sudo systemctl daemon-reload
+
+            # Restart the backend service
+            sudo systemctl restart ai-product-factory
+
+            # Wait a moment and verify it's running
+            sleep 3
+            if systemctl is-active --quiet ai-product-factory; then
+              echo "Backend deployed and running successfully!"
+            else
+              echo "ERROR: Backend failed to start!"
+              sudo journalctl -u ai-product-factory --no-pager -n 20
+              exit 1
+            fi
+
+            echo "=== Deployment Complete ==="
