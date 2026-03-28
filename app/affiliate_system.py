@@ -221,10 +221,10 @@ def track_referral_conversion(ref_code: str, revenue: float) -> dict:
     """Track a conversion (sale) from a referral."""
     with get_db() as conn:
         link = conn.execute(
-            "SELECT rl.*, a.commission_rate
+            """SELECT rl.*, a.commission_rate
              FROM referral_links rl
              JOIN affiliates a ON rl.affiliate_id = a.id
-             WHERE rl.ref_code = ?",
+             WHERE rl.ref_code = ?""",
             (ref_code,),
         ).fetchone()
         if not link:
