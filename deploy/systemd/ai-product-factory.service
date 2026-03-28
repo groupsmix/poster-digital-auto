@@ -4,8 +4,8 @@ After=network.target
 
 [Service]
 Type=simple
-User=ubuntu
-Group=ubuntu
+User=root
+Group=root
 WorkingDirectory=/opt/ai-product-factory
 Environment="PATH=/opt/ai-product-factory/.venv/bin:/usr/local/bin:/usr/bin:/bin"
 EnvironmentFile=/opt/ai-product-factory/.env
