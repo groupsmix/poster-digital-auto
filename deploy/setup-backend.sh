@@ -24,7 +24,7 @@ fi
 # 3. Create data directory for SQLite
 echo "[3/8] Setting up data directory..."
 sudo mkdir -p "$DATA_DIR"
-sudo chown ubuntu:ubuntu "$DATA_DIR"
+sudo chown root:root "$DATA_DIR"
 
 # 4. Clone or update the repo
 echo "[4/8] Setting up application..."
@@ -34,7 +34,7 @@ if [ -d "$APP_DIR" ]; then
     git pull origin main
 else
     sudo mkdir -p "$APP_DIR"
-    sudo chown ubuntu:ubuntu "$APP_DIR"
+    sudo chown root:root "$APP_DIR"
     git clone "$REPO_URL" "$APP_DIR"
 fi
 
