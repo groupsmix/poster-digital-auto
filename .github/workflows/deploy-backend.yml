@@ -24,7 +24,7 @@ jobs:
         with:
           host: ${{ secrets.HETZNER_HOST }}
           username: ${{ secrets.HETZNER_USER }}
-          key: ${{ secrets.HETZNER_SSH_KEY }}
+          password: ${{ secrets.HETZNER_PASSWORD }}
           port: ${{ secrets.HETZNER_SSH_PORT != '' && secrets.HETZNER_SSH_PORT || '22' }}
           script: |
             set -e
