@@ -801,9 +801,9 @@ function UpsellTab({ product }: { product: Product }) {
                     </span>
                   )}
                 </div>
-                {rec.reason && (
+                {rec.reason ? (
                   <p className="mt-2 text-xs text-zinc-500">{String(rec.reason)}</p>
-                )}
+                ) : null}
               </div>
             ))}
           </div>
