@@ -19,7 +19,7 @@ import type {
   WhiteLabelTenant, WhiteLabelTier,
 } from "./types";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://204.168.141.220";
+const API_URL = import.meta.env.VITE_API_URL || "https://api.wristnerd.xyz";
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, {
@@ -149,7 +149,7 @@ export async function logManualSale(data: {
 export async function importSalesCsv(file: File): Promise<{ imported: number; errors: string[]; message: string }> {
   const formData = new FormData();
   formData.append("file", file);
-  const API = import.meta.env.VITE_API_URL || "http://204.168.141.220";
+  const API = import.meta.env.VITE_API_URL || "https://api.wristnerd.xyz";
   const res = await fetch(`${API}/api/analytics/import-csv`, { method: "POST", body: formData });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
