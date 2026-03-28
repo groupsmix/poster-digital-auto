@@ -44,11 +44,11 @@ jobs:
             poetry install --no-interaction --quiet
 
             # Copy updated systemd/nginx configs if changed
-            sudo cp deploy/systemd/ai-product-factory.service /etc/systemd/system/
-            sudo systemctl daemon-reload
+            cp deploy/systemd/ai-product-factory.service /etc/systemd/system/
+            systemctl daemon-reload
 
             # Restart the backend service
-            sudo systemctl restart ai-product-factory
+            systemctl restart ai-product-factory
 
             # Wait a moment and verify it's running
             sleep 3
@@ -56,7 +56,7 @@ jobs:
               echo "Backend deployed and running successfully!"
             else
               echo "ERROR: Backend failed to start!"
-              sudo journalctl -u ai-product-factory --no-pager -n 20
+              journalctl -u ai-product-factory --no-pager -n 20
               exit 1
             fi
 
